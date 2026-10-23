@@ -1,0 +1,29 @@
+name: Build Windows
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Build MacroDeck
+        shell: pwsh
+        run: msbuild Source\MacroDeck.csproj /nologo /m /p:Configuration=Release /p:Platform=AnyCPU
+
+      - name: Verify build output
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'Source\bin\Release\MacroDeck.exe')) {
+            throw 'MacroDeck.exe was not produced by MSBuild.'
+          }

@@ -1,0 +1,20 @@
+# Build outputs
+**/bin/
+**/obj/
+dist/
+/Release/
+MacroDeck*.exe
+*.pdb
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.cache
+
+# Local user data and temporary files
+settings.json
+*.log
+*.tmp
+Thumbs.db
+.DS_Store

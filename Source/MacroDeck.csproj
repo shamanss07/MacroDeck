@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>MacroDeck</RootNamespace>
+    <AssemblyName>MacroDeck</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <LangVersion>5</LangVersion>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\Branding\MacroDeck.ico</ApplicationIcon>
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Windows.Forms" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Models\AppSettings.cs" />
+    <Compile Include="Models\Macro.cs" />
+    <Compile Include="Models\MacroChoice.cs" />
+    <Compile Include="Input\Hotkey.cs" />
+    <Compile Include="Input\NativeHooks.cs" />
+    <Compile Include="UI\MainForm.cs" />
+    <Compile Include="UI\ChromeForm.cs" />
+    <Compile Include="UI\ThemePalette.cs" />
+    <Compile Include="UI\RoundedControls.cs" />
+    <Compile Include="UI\MacroSelector.cs" />
+    <Compile Include="UI\FontManager.cs" />
+    <Compile Include="UI\StepperInput.cs" />
+    <Compile Include="UI\ModernToolTip.cs" />
+    <Compile Include="UI\ModernScrollViewer.cs" />
+    <Compile Include="UI\ColorPickerForm.cs" />
+    <Compile Include="UI\UiSounds.cs" />
+    <Compile Include="UI\ModernMenuPopup.cs" />
+    <Compile Include="UI\OptionsForm.cs" />
+    <Compile Include="Services\WindowsFolderPicker.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app.manifest" />
+    <None Include="Assets\Branding\MacroDeck.ico" />
+    <None Include="Assets\Branding\MacroDeck-Logo.png" />
+    <None Include="Assets\Branding\MacroDeck-Mark.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\Fonts\Montserrat.ttf">
+      <LogicalName>MacroDeck.Assets.Montserrat.ttf</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Assets\Fonts\OFL.txt">
+      <LogicalName>MacroDeck.Assets.OFL.txt</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>
