@@ -64,10 +64,18 @@ jobs:
             Accept = 'application/vnd.github+json'
             'X-GitHub-Api-Version' = '2022-11-28'
           }
+          $changelog = Get-Content 'CHANGELOG.md' -Raw
+          $changelog = $changelog -replace '(?m)^\[English\].*\r?\n\r?\n', ''
+          $changelog = $changelog -replace '(?ms)\r?\n---\r?\n.*\z', ''
+          $changelog = $changelog.Trim()
           $releaseNotes = @"
           MacroDeck $env:RELEASE_VERSION is available for Windows.
 
-          See the [English changelog](https://github.com/$env:GITHUB_REPOSITORY/blob/main/CHANGELOG.md) or [Portuguese changelog](https://github.com/$env:GITHUB_REPOSITORY/blob/main/CHANGELOG.pt-BR.md).
+          $changelog
+
+          ---
+
+          See the [Portuguese (Brazil) changelog](https://github.com/$env:GITHUB_REPOSITORY/blob/main/CHANGELOG.pt-BR.md).
           "@
           $release = @{
             tag_name = $env:GITHUB_REF_NAME
