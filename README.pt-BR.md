@@ -2,7 +2,7 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-Gravador e reprodutor de macros para Windows. A versão **1.1.0** adiciona suporte ao inglês e mantém o português do Brasil disponível.
+Gravador e reprodutor de macros para Windows.
 
 ## Créditos
 
@@ -38,10 +38,6 @@ Use **Definir** para alterar um atalho; Esc cancela a captura. **Ciclo Infinito*
 
 Macros são arquivos JSON na pasta escolhida. As preferências ficam em `%APPDATA%\MacroDeck\settings.json`. Fechar o programa descarta uma gravação pendente sem perguntar.
 
-## Privacidade
-
-Durante uma gravação, o MacroDeck registra teclas pressionadas e movimentos/cliques do mouse fora da própria janela do aplicativo. Os macros são arquivos JSON sem criptografia e podem conter sequências de teclas e coordenadas do cursor. Não grave senhas ou outras informações sensíveis; guarde e compartilhe os arquivos de macro com cuidado.
-
 ## Compilar a partir do código
 
 1. Instale o .NET Framework 4.8 Developer Pack no Windows.
@@ -54,14 +50,10 @@ Durante uma gravação, o MacroDeck registra teclas pressionadas e movimentos/cl
 
 O executável é criado na pasta raiz do projeto. Também é possível abrir `Source/MacroDeck.csproj` no Visual Studio. A licença OFL em `Source/Assets/Fonts/OFL.txt` cobre a fonte Montserrat incluída, não o código do MacroDeck.
 
-## Versões e releases
-
-O repositório público receberá versões estáveis, revisadas e selecionadas para lançamento; iterações locais de desenvolvimento não serão publicadas automaticamente. As versões seguem `MAJOR.MINOR.PATCH`: por exemplo, `1.0.0` para a primeira release, `1.1.0` para uma atualização de recursos e `1.1.1` para uma correção compatível. Cada release terá uma tag Git correspondente, notas em [CHANGELOG.md](CHANGELOG.md) e o executável Windows anexado.
-
 ## Licença
 
 O código do MacroDeck é disponibilizado sob a licença MIT, em `LICENSE`. A fonte Montserrat incluída tem licença SIL Open Font License 1.1, em `Source/Assets/Fonts/OFL.txt`.
 
 ---
 
-Documentação em inglês: [README.md](README.md) · [Guia de contribuição](CONTRIBUTING.md)
+Documentação em inglês: [README.md](README.md) · [Privacidade](PRIVACY.pt-BR.md) · [Guia de contribuição](CONTRIBUTING.md)

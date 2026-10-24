@@ -2,7 +2,7 @@
 
 [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-A Windows macro recorder and player. **Version 1.1.0** adds English language support while keeping Brazilian Portuguese available.
+A Windows macro recorder and player.
 
 ## Credits
 
@@ -38,10 +38,6 @@ Use **Set** to change a shortcut; Esc cancels shortcut capture. **Repeat indefin
 
 Macros are JSON files in the selected folder. Preferences are stored in `%APPDATA%\MacroDeck\settings.json`. Closing the app discards an unsaved recording without prompting.
 
-## Privacy
-
-While recording, MacroDeck captures keyboard input and mouse movement/clicks outside its own window. Macro files are unencrypted JSON and may contain keystroke sequences and cursor coordinates. Do not record passwords or other sensitive information, and take care when storing or sharing macro files.
-
 ## Build from source
 
 1. Install the .NET Framework 4.8 Developer Pack on Windows.
@@ -54,14 +50,10 @@ While recording, MacroDeck captures keyboard input and mouse movement/clicks out
 
 The executable is created in the project root. You can also open `Source/MacroDeck.csproj` in Visual Studio. The OFL license in `Source/Assets/Fonts/OFL.txt` covers the included Montserrat font, not MacroDeck's code.
 
-## Versions and releases
-
-The public repository receives stable, reviewed releases selected for publication; local development iterations are not published automatically. Versions follow `MAJOR.MINOR.PATCH`: for example, `1.0.0` for the first release, `1.1.0` for a feature update, and `1.1.1` for a compatible bug fix. Each release has a matching Git tag, notes in [CHANGELOG.md](CHANGELOG.md), and a Windows executable.
-
 ## License
 
 MacroDeck's code is released under the MIT License in `LICENSE`. The included Montserrat font is licensed under the SIL Open Font License 1.1 in `Source/Assets/Fonts/OFL.txt`.
 
 ---
 
-Documentation: [Português (Brasil)](README.pt-BR.md) · [Contributing guide](CONTRIBUTING.md)
+Documentation: [Português (Brasil)](README.pt-BR.md) · [Privacy](PRIVACY.md) · [Contributing guide](CONTRIBUTING.md)
