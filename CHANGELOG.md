@@ -4,6 +4,10 @@
 
 Only public releases are listed here. Unreleased development changes do not receive a public version entry.
 
+## 1.1.2 — repeat toggle label fix
+
+- Let the repeat toggle use the available panel width so its English label is not clipped.
+
 ## 1.1.1 — interface alignment and font fixes
 
 - Center text vertically in input fields and align unit labels with their values.

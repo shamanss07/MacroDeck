@@ -4,6 +4,10 @@
 
 As entradas abaixo registram somente versões públicas. Alterações de desenvolvimento ainda não lançadas não recebem uma versão pública.
 
+## 1.1.2 — correção do texto de repetição
+
+- Ajusta a largura do controle de repetição ao espaço do painel para evitar o corte do rótulo em inglês.
+
 ## 1.1.1 — correções de alinhamento e fontes
 
 - Centraliza verticalmente o texto dos campos e alinha as unidades aos valores.

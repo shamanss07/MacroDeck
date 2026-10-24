@@ -379,6 +379,10 @@ namespace MacroDeck
             infiniteCheck.ApplyTheme(palette.Accent, palette.Text);
             infiniteCheck.CheckedChanged += delegate { settings.CycleInfinite = infiniteCheck.Checked; settings.Repeat = infiniteCheck.Checked; SaveSettings(); };
             intervalCard.Controls.Add(infiniteCheck);
+            intervalCard.Resize += delegate
+            {
+                infiniteCheck.Width = Math.Max(150, intervalCard.ClientSize.Width - infiniteCheck.Left - 20);
+            };
             intervalCard.Controls.Add(MakeCaption(Tr("Pausa após cada ciclo"), 20, 86));
             minutesInput = new StepperInput { Location = new Point(20, 111), Width = 104, Minimum = 0, Maximum = 9999, Suffix = "min", Value = Math.Max(0, Math.Min(settings.IntervalMinutes, 9999)) };
             secondsInput = new StepperInput { Location = new Point(138, 111), Width = 104, Minimum = 0, Maximum = 59, Suffix = "s", Value = Math.Max(0, Math.Min(settings.IntervalSeconds, 59)) };
