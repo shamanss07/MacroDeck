@@ -65,13 +65,18 @@ jobs:
             'X-GitHub-Api-Version' = '2022-11-28'
           }
           $changelog = Get-Content 'CHANGELOG.md' -Raw
-          $changelog = $changelog -replace '(?m)^\[English\].*\r?\n\r?\n', ''
-          $changelog = $changelog -replace '(?ms)\r?\n---\r?\n.*\z', ''
-          $changelog = $changelog.Trim()
+          $versionPattern = "(?ms)^##\s+$([regex]::Escape($env:RELEASE_VERSION))(?=\s|$).*?(?=^##\s+|\z)"
+          $versionMatch = [regex]::Match($changelog, $versionPattern)
+          if (-not $versionMatch.Success) {
+            throw "No English changelog entry was found for version $env:RELEASE_VERSION."
+          }
+          $versionChangelog = $versionMatch.Value.Trim()
           $releaseNotes = @"
           MacroDeck $env:RELEASE_VERSION is available for Windows.
 
-          $changelog
+          # Changelog
+
+          $versionChangelog
 
           ---
 
