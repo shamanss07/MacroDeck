@@ -4,6 +4,12 @@
 
 Only public releases are listed here. Unreleased development changes do not receive a public version entry.
 
+## 1.1.1 — interface alignment and font fixes
+
+- Center text vertically in input fields and align unit labels with their values.
+- Center the stepper arrows and keep them aligned across different control sizes.
+- Apply the selected font consistently to the interval controls and reopened dialogs.
+
 ## 1.1.0 — English language support
 
 - Add English and Brazilian Portuguese interface translations, with language changes applied immediately.

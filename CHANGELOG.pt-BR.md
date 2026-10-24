@@ -4,6 +4,12 @@
 
 As entradas abaixo registram somente versões públicas. Alterações de desenvolvimento ainda não lançadas não recebem uma versão pública.
 
+## 1.1.1 — correções de alinhamento e fontes
+
+- Centraliza verticalmente o texto dos campos e alinha as unidades aos valores.
+- Centraliza as setas dos controles de incremento, mantendo o alinhamento em diferentes tamanhos.
+- Aplica a fonte selecionada de forma consistente nos intervalos e nas janelas reabertas.
+
 ## 1.1.0 — suporte ao idioma inglês
 
 - Adiciona traduções para inglês e português do Brasil, com troca de idioma aplicada imediatamente.

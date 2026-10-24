@@ -496,6 +496,7 @@ namespace MacroDeck
         {
             if (optionsDialog == null || optionsDialog.IsDisposed) optionsDialog = new OptionsForm(settings, palette, uiLanguage);
             optionsDialog.RefreshPalette(palette);
+            ApplyFontTree(optionsDialog);
             optionsDialog.DialogResult = DialogResult.None;
             if (optionsDialog.ShowDialog(this) == DialogResult.OK)
             {
@@ -579,6 +580,7 @@ namespace MacroDeck
         {
             if (aboutDialog == null || aboutDialog.IsDisposed) aboutDialog = new AboutForm(palette, uiLanguage);
             aboutDialog.RefreshPalette(palette);
+            ApplyFontTree(aboutDialog);
             aboutDialog.DialogResult = DialogResult.None;
             aboutDialog.ShowDialog(this);
         }

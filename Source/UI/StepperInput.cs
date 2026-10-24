@@ -10,7 +10,6 @@ namespace MacroDeck
         private readonly TextBox valueBox;
         private readonly StepperArrowButton upButton;
         private readonly StepperArrowButton downButton;
-        private readonly Font suffixFont;
         private int value;
         private int minimum;
         private int maximum = 9999;
@@ -40,9 +39,9 @@ namespace MacroDeck
         public StepperInput()
         {
             Height = 34; Width = 104; BackColor = Color.FromArgb(41, 46, 56); ForeColor = Color.White;
-            suffixFont = FontManager.Create(8.5f, FontStyle.Regular);
+            Font = FontManager.Create(8.5f, FontStyle.Regular);
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
-            valueBox = new TextBox { AutoSize = false, BorderStyle = BorderStyle.None, Text = "0", TextAlign = HorizontalAlignment.Center, Location = new Point(7, 6), Width = 54, Height = 22, BackColor = BackColor, ForeColor = ForeColor, Font = FontManager.Create(9.5f, FontStyle.Regular) };
+            valueBox = new TextBox { AutoSize = false, BorderStyle = BorderStyle.None, Text = "0", TextAlign = HorizontalAlignment.Center, BackColor = BackColor, ForeColor = ForeColor, Font = Font };
             upButton = new StepperArrowButton(true) { BackColor = Color.FromArgb(57, 63, 74), ForeColor = Color.White, TabStop = false, AccessibleName = "Aumentar valor" };
             downButton = new StepperArrowButton(false) { BackColor = Color.FromArgb(57, 63, 74), ForeColor = Color.White, TabStop = false, AccessibleName = "Diminuir valor" };
             Controls.Add(valueBox); Controls.Add(upButton); Controls.Add(downButton);
@@ -67,13 +66,23 @@ namespace MacroDeck
         {
             int buttonWidth = 23;
             int arrowLeft = Width - buttonWidth - 3;
-            int suffixWidth = String.IsNullOrEmpty(suffix) ? 0 : 26;
-            int suffixLeft = arrowLeft - suffixWidth - (suffixWidth == 0 ? 0 : 5);
-            int valueRight = suffixWidth == 0 ? arrowLeft - 6 : suffixLeft - 5;
-            int editHeight = Math.Max(valueBox.PreferredHeight + 4, Font.Height + 7);
-            valueBox.SetBounds(8, Math.Max(2, (Height - editHeight) / 2), Math.Max(20, valueRight - 8), editHeight);
-            upButton.SetBounds(arrowLeft, 3, buttonWidth, Math.Max(11, (Height - 9) / 2));
-            downButton.SetBounds(Width - buttonWidth - 3, upButton.Bottom + 2, buttonWidth, Math.Max(11, Height - upButton.Bottom - 5));
+            int suffixWidth = MeasureSuffixWidth();
+            int suffixLeft = arrowLeft - suffixWidth - (suffixWidth == 0 ? 0 : 4);
+            int valueRight = suffixWidth == 0 ? arrowLeft - 6 : suffixLeft - 4;
+            int editHeight = Math.Min(Math.Max(1, Height - 4), Math.Max(1, valueBox.PreferredHeight));
+            valueBox.SetBounds(8, (Height - editHeight) / 2, Math.Max(1, valueRight - 8), editHeight);
+
+            int buttonHeight = Math.Max(1, (Height - 8) / 2);
+            int buttonTop = (Height - (buttonHeight * 2 + 2)) / 2;
+            upButton.SetBounds(arrowLeft, buttonTop, buttonWidth, buttonHeight);
+            downButton.SetBounds(arrowLeft, buttonTop + buttonHeight + 2, buttonWidth, buttonHeight);
+        }
+
+        private int MeasureSuffixWidth()
+        {
+            if (String.IsNullOrEmpty(suffix)) return 0;
+            Size measured = TextRenderer.MeasureText(suffix, Font, new Size(512, Math.Max(1, Height)), TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+            return measured.Width + 8;
         }
 
         protected override void OnPaintBackground(PaintEventArgs e)
@@ -93,15 +102,10 @@ namespace MacroDeck
             if (!String.IsNullOrEmpty(suffix))
             {
                 int arrowLeft = Width - 23 - 3;
-                Rectangle suffixBounds = new Rectangle(arrowLeft - 31, 1, 26, Height - 2);
-                TextRenderer.DrawText(e.Graphics, suffix, suffixFont, suffixBounds, ForeColor, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+                int suffixWidth = MeasureSuffixWidth();
+                Rectangle suffixBounds = new Rectangle(arrowLeft - suffixWidth - 4, valueBox.Top, suffixWidth, valueBox.Height);
+                TextRenderer.DrawText(e.Graphics, suffix, Font, suffixBounds, ForeColor, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
             }
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing && suffixFont != null) suffixFont.Dispose();
-            base.Dispose(disposing);
         }
 
         protected override void OnFontChanged(EventArgs e)
@@ -148,21 +152,14 @@ namespace MacroDeck
             Color fill = pressed ? RoundedControls.Blend(BackColor, Color.Black, 0.18f) : (hovered ? RoundedControls.Blend(BackColor, Color.White, 0.12f) : BackColor);
             using (GraphicsPath path = RoundedControls.Path(bounds, 5))
             using (SolidBrush brush = new SolidBrush(fill)) e.Graphics.FillPath(brush, path);
-            int cx = Width / 2;
-            int cy = Height / 2 + (pointsUp ? 1 : -1);
-            using (Pen pen = new Pen(ForeColor, 1.7f))
+            float cx = (Width - 1) / 2f;
+            float cy = (Height - 1) / 2f;
+            PointF[] arrow = pointsUp
+                ? new[] { new PointF(cx - 4f, cy + 2f), new PointF(cx, cy - 2f), new PointF(cx + 4f, cy + 2f) }
+                : new[] { new PointF(cx - 4f, cy - 2f), new PointF(cx, cy + 2f), new PointF(cx + 4f, cy - 2f) };
+            using (SolidBrush brush = new SolidBrush(ForeColor))
             {
-                pen.StartCap = LineCap.Round; pen.EndCap = LineCap.Round;
-                if (pointsUp)
-                {
-                    e.Graphics.DrawLine(pen, cx - 4, cy + 2, cx, cy - 2);
-                    e.Graphics.DrawLine(pen, cx, cy - 2, cx + 4, cy + 2);
-                }
-                else
-                {
-                    e.Graphics.DrawLine(pen, cx - 4, cy - 2, cx, cy + 2);
-                    e.Graphics.DrawLine(pen, cx, cy + 2, cx + 4, cy - 2);
-                }
+                e.Graphics.FillPolygon(brush, arrow);
             }
         }
     }

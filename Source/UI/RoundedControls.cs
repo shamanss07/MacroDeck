@@ -346,7 +346,7 @@ namespace MacroDeck
             BackColor = Color.FromArgb(41, 46, 56);
             ForeColor = Color.White;
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
-            input = new TextBox { AutoSize = false, BorderStyle = BorderStyle.None, Location = new Point(9, 4), Width = Math.Max(20, Width - 18), Height = 24, BackColor = BackColor, ForeColor = ForeColor, Font = FontManager.Create(8.5f, FontStyle.Regular), TabStop = true };
+            input = new TextBox { AutoSize = false, BorderStyle = BorderStyle.None, Multiline = false, Location = new Point(9, 2), Width = Math.Max(1, Width - 18), Height = Math.Max(1, Height - 4), BackColor = BackColor, ForeColor = ForeColor, Font = FontManager.Create(8.5f, FontStyle.Regular), TabStop = true };
             input.TextChanged += delegate { OnTextChanged(EventArgs.Empty); };
             input.GotFocus += delegate { Invalidate(); };
             input.LostFocus += delegate { Invalidate(); };
@@ -368,8 +368,8 @@ namespace MacroDeck
         private void PositionInput()
         {
             if (input == null) return;
-            int editHeight = Math.Max(input.PreferredHeight + 4, Font.Height + 7);
-            input.SetBounds(9, Math.Max(1, (Height - editHeight) / 2), Math.Max(20, Width - 18), editHeight);
+            int editHeight = Math.Min(Math.Max(1, Height - 4), Math.Max(1, input.PreferredHeight));
+            input.SetBounds(9, (Height - editHeight) / 2, Math.Max(1, Width - 18), editHeight);
         }
 
         protected override void OnPaintBackground(PaintEventArgs e)

@@ -61,7 +61,7 @@ namespace MacroDeck
             { "Idioma do aplicativo", "App language" }, { "Português (Brasil)", "Portuguese (Brazil)" },
             { "Inglês", "English" }, { "A mudança de idioma será aplicada imediatamente.", "The language change will take effect immediately." },
             { "Restaurar cores padrão", "Restore default colors" }, { "Cancelar", "Cancel" }, { "Salvar", "Save" },
-            { "Versão 1.1.0", "Version 1.1.0" }, { "Criado por shamanss07", "Created by shamanss07" },
+            { "Versão 1.1.1", "Version 1.1.1" }, { "Criado por shamanss07", "Created by shamanss07" },
             { "Gravador e reprodutor de macros para Windows.\r\nSeus macros e preferências ficam no computador.", "A macro recorder and player for Windows.\r\nYour macros and preferences stay on your computer." },
             { "Fonte Montserrat · SIL Open Font License 1.1", "Montserrat font · SIL Open Font License 1.1" },
             { "Ver licença da fonte", "View font license" }, { "Fechar", "Close" }, { "Licença Montserrat", "Montserrat License" },
