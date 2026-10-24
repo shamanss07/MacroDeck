@@ -4,6 +4,13 @@
 
 Only public releases are listed here. Unreleased development changes do not receive a public version entry.
 
+## 1.1.3 — smoother transitions and theme fixes
+
+- Add smoother window, page, and menu transitions, including minimize, restore, and maximize animations.
+- Prevent white flashes in the Menu dropdown and keep rounded panels clean while themes redraw.
+- Reduce cursor lag at startup by activating mouse capture only during recording.
+- Stabilize the light/dark theme fade and update the Options window colors with the selected theme.
+
 ## 1.1.2 — repeat toggle label fix
 
 - Let the repeat toggle use the available panel width so its English label is not clipped.

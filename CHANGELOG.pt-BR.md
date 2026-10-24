@@ -4,6 +4,13 @@
 
 As entradas abaixo registram somente versões públicas. Alterações de desenvolvimento ainda não lançadas não recebem uma versão pública.
 
+## 1.1.3 — transições mais suaves e correções de tema
+
+- Melhora as transições da janela, das páginas e do menu, incluindo minimizar, restaurar e maximizar.
+- Remove o flash branco do menu e evita que os cantos dos painéis arredondados pisquem durante a troca de tema.
+- Reduz a lentidão do cursor na inicialização, ativando a captura do mouse somente durante uma gravação.
+- Estabiliza o fade entre os temas claro e escuro e atualiza as cores da janela Opções conforme o tema selecionado.
+
 ## 1.1.2 — correção do texto de repetição
 
 - Ajusta a largura do controle de repetição ao espaço do painel para evitar o corte do rótulo em inglês.

@@ -65,6 +65,7 @@ namespace MacroDeck
         {
             Thread worker = new Thread(new ThreadStart(delegate { lock (familyListLock) { if (installedFamilyNames == null) installedFamilyNames = EnumerateInstalledFamilies(); } }));
             worker.IsBackground = true;
+            worker.Priority = ThreadPriority.BelowNormal;
             worker.Name = "MacroDeck font discovery";
             worker.Start();
         }

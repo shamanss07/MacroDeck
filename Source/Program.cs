@@ -10,7 +10,6 @@ namespace MacroDeck
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            FontManager.PreloadInstalledFamilies();
             Application.Run(new MainForm());
         }
     }

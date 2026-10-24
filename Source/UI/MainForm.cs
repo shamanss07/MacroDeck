@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -64,7 +65,11 @@ namespace MacroDeck
         private ModernScrollViewer macroPage;
         private ModernMenuPopup appMenu;
         private ModernToolTip toolTips;
+        private System.Windows.Forms.Timer themeTransitionTimer;
+        private readonly Stopwatch themeTransitionClock = new Stopwatch();
+        private ThemeTransitionSurface themeTransitionSurface;
         private System.Windows.Forms.Timer pageTransitionTimer;
+        private PageTransitionSurface transitionSurface;
         private readonly Stopwatch pageTransitionClock = new Stopwatch();
 
         [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
@@ -180,7 +185,7 @@ namespace MacroDeck
         private void BuildUi()
         {
             SuspendLayout();
-            TableLayoutPanel root = new TableLayoutPanel {
+            BufferedTableLayoutPanel root = new BufferedTableLayoutPanel {
                 Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2,
                 Padding = new Padding(22, 14, 22, 16), Tag = "surface"
             };
@@ -189,7 +194,7 @@ namespace MacroDeck
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             ContentPanel.Controls.Add(root);
 
-            headerPanel = new Panel { Dock = DockStyle.Fill, Tag = "surface" };
+            headerPanel = new BufferedPanel { Dock = DockStyle.Fill, Tag = "surface" };
             titleLabel = new Label { Text = "MacroDeck", AutoSize = true, Location = new Point(0, 0), Font = FontManager.Create(22f, FontStyle.Bold), ForeColor = palette.Text };
             subtitleLabel = new Label { Text = Tr("Grave, organize e reproduza ações."), AutoSize = true, Location = new Point(2, 42), Font = FontManager.Create(8.5f, FontStyle.Regular), ForeColor = palette.Muted, Tag = "muted" };
             macroNavButton = MakeButton("Macro", 0, 25, 88, 38, true);
@@ -198,13 +203,7 @@ namespace MacroDeck
             clickerNavButton.Click += delegate { SetActivePage(true); };
             themeButton = MakeButton(Tr("Claro"), 0, 25, 94, 38, false);
             themeButton.Icon = "sun";
-            themeButton.Click += delegate
-            {
-                settings.DarkTheme = !settings.DarkTheme;
-                palette = ThemePalette.From(settings);
-                SaveSettings();
-                ApplyTheme();
-            };
+            themeButton.Click += delegate { BeginThemeTransition(); };
             menuButton = MakeButton("Menu", 0, 25, 100, 38, false);
             menuButton.Icon = "chevron";
             menuButton.Click += delegate { ShowAppMenu(); };
@@ -246,7 +245,7 @@ namespace MacroDeck
         {
             macroPage = new ModernScrollViewer { Dock = DockStyle.Fill, Tag = "surface" };
             pageHost.Controls.Add(macroPage);
-            TableLayoutPanel grid = new TableLayoutPanel {
+            BufferedTableLayoutPanel grid = new BufferedTableLayoutPanel {
                 Dock = DockStyle.Top, ColumnCount = 2, RowCount = 3, AutoSize = true,
                 GrowStyle = TableLayoutPanelGrowStyle.AddRows, Tag = "surface", Padding = new Padding(0, 0, 0, 5)
             };
@@ -412,64 +411,123 @@ namespace MacroDeck
 
         private void SetActivePage(bool clicker)
         {
-            if (clicker == activeClickerPage && pageTransitionTimer != null && pageTransitionTimer.Enabled == false) return;
+            if (pageTransitionTimer != null && pageTransitionTimer.Enabled) FinishPageTransition();
+            if (clicker == activeClickerPage) return;
             if (pageTransitionTimer == null)
             {
-                pageTransitionTimer = new System.Windows.Forms.Timer { Interval = 15 };
+                pageTransitionTimer = new System.Windows.Forms.Timer { Interval = 16 };
                 pageTransitionTimer.Tick += AnimatePageTransition;
             }
-            if (pageTransitionTimer.Enabled)
-            {
-                pageTransitionTimer.Stop();
-                UiAnimationClock.End();
-                bool currentlyClicker = pageTransitionTarget;
-                macroPage.Dock = DockStyle.Fill; autoClickerPage.Dock = DockStyle.Fill;
-                macroPage.Visible = !currentlyClicker; autoClickerPage.Visible = currentlyClicker;
-                activeClickerPage = currentlyClicker;
-            }
-            if (clicker == activeClickerPage) return;
-            pageTransitionTarget = clicker;
-            pageTransitionClock.Restart();
-            pageTransitionFrom = activeClickerPage;
-            macroPage.Dock = DockStyle.None;
-            autoClickerPage.Dock = DockStyle.None;
+
             Rectangle area = pageHost.ClientRectangle;
+            if (area.Width < 2 || area.Height < 2)
+            {
+                ApplyActivePage(clicker);
+                return;
+            }
+
+            pageTransitionTarget = clicker;
+            Control leaving = activeClickerPage ? (Control)autoClickerPage : (Control)macroPage;
             Control entering = clicker ? (Control)autoClickerPage : (Control)macroPage;
-            Control leaving = clicker ? (Control)macroPage : (Control)autoClickerPage;
-            entering.SetBounds(clicker ? area.Width : -area.Width, 0, area.Width, area.Height);
-            leaving.SetBounds(0, 0, area.Width, area.Height);
-            entering.Visible = true;
-            leaving.Visible = true;
-            entering.BringToFront();
-            activeClickerPage = clicker;
+            Bitmap outgoing = null;
+            Bitmap incoming = null;
+            bool captureFailed = false;
+            try
+            {
+                leaving.Dock = DockStyle.None;
+                leaving.Bounds = area;
+                outgoing = CapturePage(leaving, area.Size);
+
+                entering.Dock = DockStyle.None;
+                entering.Bounds = area;
+                entering.Visible = true;
+                entering.BringToFront();
+                entering.PerformLayout();
+                incoming = CapturePage(entering, area.Size);
+            }
+            catch
+            {
+                if (outgoing != null) outgoing.Dispose();
+                if (incoming != null) incoming.Dispose();
+                captureFailed = true;
+            }
+            finally
+            {
+                entering.Visible = false;
+                leaving.Visible = true;
+            }
+            if (captureFailed)
+            {
+                ApplyActivePage(clicker);
+                return;
+            }
+
+            transitionSurface = new PageTransitionSurface(outgoing, incoming, palette.Background) { Dock = DockStyle.Fill };
+            pageHost.Controls.Add(transitionSurface);
+            transitionSurface.BringToFront();
+            leaving.Visible = false;
+            entering.Visible = false;
             macroNavButton.Tag = clicker ? "secondary" : "selected";
             clickerNavButton.Tag = clicker ? "selected" : "secondary";
             ApplyControlTheme(headerPanel);
+            pageTransitionClock.Restart();
             UiAnimationClock.Begin();
             pageTransitionTimer.Start();
         }
 
-        private bool pageTransitionFrom;
+        private static Bitmap CapturePage(Control page, Size size)
+        {
+            Bitmap bitmap = new Bitmap(size.Width, size.Height);
+            try
+            {
+                page.DrawToBitmap(bitmap, new Rectangle(Point.Empty, size));
+                return bitmap;
+            }
+            catch
+            {
+                bitmap.Dispose();
+                throw;
+            }
+        }
+
+        private void ApplyActivePage(bool clicker)
+        {
+            activeClickerPage = clicker;
+            macroPage.Dock = DockStyle.Fill;
+            autoClickerPage.Dock = DockStyle.Fill;
+            macroPage.Location = Point.Empty;
+            autoClickerPage.Location = Point.Empty;
+            macroPage.Visible = !clicker;
+            autoClickerPage.Visible = clicker;
+            macroNavButton.Tag = clicker ? "secondary" : "selected";
+            clickerNavButton.Tag = clicker ? "selected" : "secondary";
+            ApplyControlTheme(headerPanel);
+        }
+
+        private void FinishPageTransition()
+        {
+            if (pageTransitionTimer != null && pageTransitionTimer.Enabled)
+            {
+                pageTransitionTimer.Stop();
+                UiAnimationClock.End();
+            }
+            pageTransitionClock.Stop();
+            if (transitionSurface != null)
+            {
+                pageHost.Controls.Remove(transitionSurface);
+                transitionSurface.Dispose();
+                transitionSurface = null;
+            }
+            ApplyActivePage(pageTransitionTarget);
+        }
 
         private void AnimatePageTransition(object sender, EventArgs e)
         {
-            float progress = Math.Min(1f, (float)(pageTransitionClock.Elapsed.TotalMilliseconds / 180.0));
+            float progress = Math.Min(1f, (float)(pageTransitionClock.Elapsed.TotalMilliseconds / 210.0));
             float eased = progress * progress * (3f - 2f * progress);
-            int width = pageHost.ClientSize.Width;
-            Control entering = pageTransitionTarget ? (Control)autoClickerPage : (Control)macroPage;
-            Control leaving = pageTransitionFrom ? (Control)autoClickerPage : (Control)macroPage;
-            int distance = (int)(width * eased);
-            entering.Left = pageTransitionTarget ? width - distance : -width + distance;
-            leaving.Left = pageTransitionTarget ? -distance : distance;
+            if (transitionSurface != null) transitionSurface.Progress = eased;
             if (progress < 1f) return;
-            pageTransitionTimer.Stop();
-            UiAnimationClock.End();
-            pageTransitionClock.Stop();
-            activeClickerPage = pageTransitionTarget;
-            macroPage.Visible = !activeClickerPage;
-            autoClickerPage.Visible = activeClickerPage;
-            macroPage.Dock = DockStyle.Fill; autoClickerPage.Dock = DockStyle.Fill;
-            macroPage.Location = Point.Empty; autoClickerPage.Location = Point.Empty;
+            FinishPageTransition();
         }
 
         private void ShowAppMenu()
@@ -488,7 +546,10 @@ namespace MacroDeck
         protected override void OnResize(EventArgs e)
         {
             base.OnResize(e);
-            if (WindowState == FormWindowState.Minimized && appMenu != null && !appMenu.IsDisposed) appMenu.Hide();
+            if (themeTransitionTimer != null && themeTransitionTimer.Enabled &&
+                (WindowState == FormWindowState.Minimized || themeTransitionSurface == null || themeTransitionSurface.Size != ClientSize))
+                FinishThemeTransition();
+            if (WindowState == FormWindowState.Minimized && appMenu != null && !appMenu.IsDisposed) appMenu.Dismiss();
         }
 
         private void ApplyMenuTheme()
@@ -537,6 +598,7 @@ namespace MacroDeck
 
         private void RebuildUiForLanguage()
         {
+            if (pageTransitionTimer != null && pageTransitionTimer.Enabled) FinishPageTransition();
             bool showClickerPage = activeClickerPage;
             if (pageTransitionTimer != null)
             {
@@ -648,6 +710,86 @@ namespace MacroDeck
             ContentPanel.Invalidate(true);
         }
 
+        private void BeginThemeTransition()
+        {
+            if (themeTransitionTimer == null)
+            {
+                themeTransitionTimer = new System.Windows.Forms.Timer { Interval = 15 };
+                themeTransitionTimer.Tick += AnimateThemeTransition;
+            }
+            if (themeTransitionTimer.Enabled) return;
+            if (!Visible || WindowState == FormWindowState.Minimized)
+            {
+                SwitchTheme();
+                return;
+            }
+            Bitmap previousFrame = CaptureThemeFrame();
+            SwitchTheme();
+            Bitmap currentFrame = CaptureThemeFrame();
+            if (previousFrame == null || currentFrame == null)
+            {
+                if (previousFrame != null) previousFrame.Dispose();
+                if (currentFrame != null) currentFrame.Dispose();
+                return;
+            }
+
+            themeTransitionSurface = new ThemeTransitionSurface(previousFrame, currentFrame) { Bounds = ClientRectangle };
+            Controls.Add(themeTransitionSurface);
+            themeTransitionSurface.BringToFront();
+            themeTransitionClock.Restart();
+            UiAnimationClock.Begin();
+            themeTransitionTimer.Start();
+        }
+
+        private Bitmap CaptureThemeFrame()
+        {
+            if (ClientSize.Width < 1 || ClientSize.Height < 1) return null;
+            Bitmap frame = new Bitmap(ClientSize.Width, ClientSize.Height, PixelFormat.Format32bppPArgb);
+            try
+            {
+                DrawToBitmap(frame, new Rectangle(Point.Empty, ClientSize));
+                return frame;
+            }
+            catch
+            {
+                frame.Dispose();
+                return null;
+            }
+        }
+
+        private void SwitchTheme()
+        {
+            settings.DarkTheme = !settings.DarkTheme;
+            palette = ThemePalette.From(settings);
+            SaveSettings();
+            ApplyTheme();
+        }
+
+        private void AnimateThemeTransition(object sender, EventArgs e)
+        {
+            float progress = Math.Min(1f, (float)(themeTransitionClock.Elapsed.TotalMilliseconds / 240.0));
+            float eased = progress * progress * (3f - 2f * progress);
+            if (themeTransitionSurface != null) themeTransitionSurface.Progress = eased;
+            if (progress < 1f) return;
+            FinishThemeTransition();
+        }
+
+        private void FinishThemeTransition()
+        {
+            if (themeTransitionTimer != null && themeTransitionTimer.Enabled)
+            {
+                themeTransitionTimer.Stop();
+                UiAnimationClock.End();
+            }
+            themeTransitionClock.Stop();
+            if (themeTransitionSurface != null)
+            {
+                Controls.Remove(themeTransitionSurface);
+                themeTransitionSurface.Dispose();
+                themeTransitionSurface = null;
+            }
+        }
+
         private void ApplyControlTheme(Control parent)
         {
             foreach (Control c in parent.Controls)
@@ -688,6 +830,11 @@ namespace MacroDeck
             BeginInvoke((MethodInvoker)delegate
             {
                 LoadMacros();
+                System.Threading.ThreadPool.QueueUserWorkItem(delegate
+                {
+                    System.Threading.Thread.Sleep(900);
+                    FontManager.PreloadInstalledFamilies();
+                });
             });
         }
 
@@ -860,7 +1007,16 @@ namespace MacroDeck
             saveButton.Enabled = false;
             lock (eventsLock) recordedEvents.Clear();
             recordLimitQueued = false;
-            if (hooks != null) hooks.ResetMouseTracking();
+            try
+            {
+                if (hooks != null) hooks.BeginMouseCapture();
+            }
+            catch (Exception ex)
+            {
+                UpdateRuntimeUi("Não foi possível iniciar a gravação", "", false);
+                MessageBox.Show(this, Tr("Não foi possível iniciar a captura do mouse.") + "\r\n\r\n" + ex.Message, Tr("Erro ao gravar"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
             recordClock.Reset(); recordClock.Start();
             recording = true;
             eventsLabel.Text = "";
@@ -872,6 +1028,7 @@ namespace MacroDeck
         {
             if (!recording) return;
             recording = false;
+            if (hooks != null) hooks.EndMouseCapture();
             UiSounds.RecordingStop();
             recordClock.Stop();
             List<MacroEvent> copy;
@@ -1346,6 +1503,7 @@ namespace MacroDeck
 
         private void OnClosing(object sender, FormClosingEventArgs e)
         {
+            FinishThemeTransition();
             if (recording) StopRecording();
             pendingEvents = null;
             if (playbackCancel != null) playbackCancel.Cancel();
@@ -1353,9 +1511,121 @@ namespace MacroDeck
             if (toolTips != null) toolTips.Dispose();
             if (hooks != null) hooks.Dispose();
             if (pageTransitionTimer != null) { if (pageTransitionTimer.Enabled) UiAnimationClock.End(); pageTransitionTimer.Stop(); pageTransitionTimer.Dispose(); pageTransitionTimer = null; }
+            if (themeTransitionTimer != null)
+            {
+                if (themeTransitionTimer.Enabled) UiAnimationClock.End();
+                themeTransitionTimer.Stop();
+                themeTransitionTimer.Dispose();
+                themeTransitionTimer = null;
+            }
+            themeTransitionClock.Stop();
             if (optionsDialog != null) { optionsDialog.Dispose(); optionsDialog = null; }
             if (aboutDialog != null) { aboutDialog.Dispose(); aboutDialog = null; }
             if (appMenu != null) { appMenu.Dispose(); appMenu = null; }
+            if (transitionSurface != null) { transitionSurface.Dispose(); transitionSurface = null; }
+        }
+
+        private sealed class ThemeTransitionSurface : Control
+        {
+            private readonly Bitmap previousFrame;
+            private readonly Bitmap currentFrame;
+            private float progress;
+
+            public float Progress
+            {
+                get { return progress; }
+                set { progress = Math.Max(0, Math.Min(1, value)); Invalidate(); }
+            }
+
+            public ThemeTransitionSurface(Bitmap oldFrame, Bitmap newFrame)
+            {
+                previousFrame = oldFrame;
+                currentFrame = newFrame;
+                SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                    ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.Opaque, true);
+            }
+
+            protected override void OnPaintBackground(PaintEventArgs e) { }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                if (previousFrame == null || currentFrame == null || ClientSize.Width < 1 || ClientSize.Height < 1) return;
+                e.Graphics.DrawImage(previousFrame, ClientRectangle);
+                if (progress <= 0f) return;
+                using (ImageAttributes attributes = new ImageAttributes())
+                {
+                    ColorMatrix matrix = new ColorMatrix();
+                    matrix.Matrix33 = progress;
+                    attributes.SetColorMatrix(matrix, ColorMatrixFlag.Default, ColorAdjustType.Bitmap);
+                    e.Graphics.DrawImage(currentFrame, ClientRectangle, 0, 0, currentFrame.Width, currentFrame.Height,
+                        GraphicsUnit.Pixel, attributes);
+                }
+            }
+
+            protected override void Dispose(bool disposing)
+            {
+                if (disposing)
+                {
+                    if (previousFrame != null) previousFrame.Dispose();
+                    if (currentFrame != null) currentFrame.Dispose();
+                }
+                base.Dispose(disposing);
+            }
+        }
+
+        private sealed class PageTransitionSurface : Control
+        {
+            private readonly Bitmap outgoing;
+            private readonly Bitmap incoming;
+            private float progress;
+
+            public float Progress
+            {
+                get { return progress; }
+                set { progress = Math.Max(0, Math.Min(1, value)); Invalidate(); }
+            }
+
+            public PageTransitionSurface(Bitmap outgoingImage, Bitmap incomingImage, Color background)
+            {
+                outgoing = outgoingImage;
+                incoming = incomingImage;
+                BackColor = background;
+                SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                    ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            }
+
+            protected override void OnPaintBackground(PaintEventArgs e)
+            {
+                e.Graphics.Clear(BackColor);
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                base.OnPaint(e);
+                if (outgoing == null || incoming == null || ClientSize.Width < 1 || ClientSize.Height < 1) return;
+                Rectangle destination = ClientRectangle;
+                e.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBilinear;
+                e.Graphics.DrawImage(outgoing, destination);
+                if (progress <= 0) return;
+                using (ImageAttributes attributes = new ImageAttributes())
+                {
+                    ColorMatrix matrix = new ColorMatrix();
+                    matrix.Matrix33 = progress;
+                    attributes.SetColorMatrix(matrix, ColorMatrixFlag.Default, ColorAdjustType.Bitmap);
+                    e.Graphics.DrawImage(incoming, destination, 0, 0, incoming.Width, incoming.Height,
+                        GraphicsUnit.Pixel, attributes);
+                }
+            }
+
+            protected override void Dispose(bool disposing)
+            {
+                if (disposing)
+                {
+                    if (outgoing != null) outgoing.Dispose();
+                    if (incoming != null) incoming.Dispose();
+                }
+                base.Dispose(disposing);
+            }
         }
     }
 }

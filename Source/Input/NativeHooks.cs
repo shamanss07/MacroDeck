@@ -53,16 +53,38 @@ namespace MacroDeck
             mouseProc = MouseCallback;
             IntPtr module = GetModuleHandle(null);
             keyboardHook = SetWindowsHookEx(WhKeyboardLl, keyboardProc, module, 0);
-            mouseHook = SetWindowsHookEx(WhMouseLl, mouseProc, module, 0);
-            if (keyboardHook == IntPtr.Zero || mouseHook == IntPtr.Zero)
+            if (keyboardHook == IntPtr.Zero)
             {
                 int error = Marshal.GetLastWin32Error();
                 Dispose();
-                throw new System.ComponentModel.Win32Exception(error, "Não foi possível iniciar a captura global de teclado e mouse.");
+                throw new System.ComponentModel.Win32Exception(error, "Não foi possível iniciar a captura global de teclado.");
             }
         }
 
         public void ResetMouseTracking() { lastMouseX = Int32.MinValue; lastMouseY = Int32.MinValue; lastMouseMs = -1000; }
+
+        public void BeginMouseCapture()
+        {
+            if (mouseHook != IntPtr.Zero) return;
+            IntPtr module = GetModuleHandle(null);
+            mouseHook = SetWindowsHookEx(WhMouseLl, mouseProc, module, 0);
+            if (mouseHook == IntPtr.Zero)
+            {
+                int error = Marshal.GetLastWin32Error();
+                throw new System.ComponentModel.Win32Exception(error, "Não foi possível iniciar a captura global do mouse.");
+            }
+            ResetMouseTracking();
+        }
+
+        public void EndMouseCapture()
+        {
+            if (mouseHook != IntPtr.Zero)
+            {
+                UnhookWindowsHookEx(mouseHook);
+                mouseHook = IntPtr.Zero;
+            }
+            ResetMouseTracking();
+        }
 
         private IntPtr KeyboardCallback(int code, IntPtr wParam, IntPtr lParam)
         {
@@ -114,6 +136,7 @@ namespace MacroDeck
         private IntPtr MouseCallback(int code, IntPtr wParam, IntPtr lParam)
         {
             if (code < 0) return CallNextHookEx(mouseHook, code, wParam, lParam);
+            if (!owner.IsRecording) return CallNextHookEx(mouseHook, code, wParam, lParam);
             MouseLl data = (MouseLl)Marshal.PtrToStructure(lParam, typeof(MouseLl));
             if ((data.Flags & LlmhfInjected) != 0) return CallNextHookEx(mouseHook, code, wParam, lParam);
             int message = wParam.ToInt32();
@@ -165,7 +188,7 @@ namespace MacroDeck
         public void Dispose()
         {
             if (keyboardHook != IntPtr.Zero) { UnhookWindowsHookEx(keyboardHook); keyboardHook = IntPtr.Zero; }
-            if (mouseHook != IntPtr.Zero) { UnhookWindowsHookEx(mouseHook); mouseHook = IntPtr.Zero; }
+            EndMouseCapture();
         }
     }
 }

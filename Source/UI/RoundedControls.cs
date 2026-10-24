@@ -17,7 +17,6 @@ namespace MacroDeck
                 if (borderColor == value) return;
                 borderColor = value;
                 Invalidate(true);
-                if (Parent != null) Parent.Invalidate(Bounds, true);
             }
         }
 
@@ -33,7 +32,6 @@ namespace MacroDeck
         {
             base.OnBackColorChanged(e);
             Invalidate(true);
-            if (Parent != null) Parent.Invalidate(Bounds, true);
         }
 
         protected override void OnParentBackColorChanged(EventArgs e)

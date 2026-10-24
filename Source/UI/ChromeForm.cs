@@ -24,6 +24,10 @@ namespace MacroDeck
         private const int WsSysMenu = 0x00080000;
         private const int WsMinimizeBox = 0x00020000;
         private const int WsMaximizeBox = 0x00010000;
+        private const int FadeIn = 1;
+        private const int FadeOutClose = 3;
+        private const int FadeOutMinimize = 4;
+        private const int FadeOutWindowState = 5;
 
         private readonly bool canResize;
         private readonly bool animateOpen;
@@ -32,8 +36,17 @@ namespace MacroDeck
         private readonly RoundedButton closeButton;
         private PictureBox applicationMark;
         private bool fadeInPending;
+        private bool fadeInScheduled;
         private bool allowClose;
         private int animationMode;
+        private float animationFromOpacity;
+        private float animationToOpacity;
+        private double animationDurationMs = 170;
+        private DialogResult animatedDialogResult;
+        private FormWindowState pendingWindowState;
+        private FormWindowState lastWindowState = FormWindowState.Normal;
+        private bool restoreFadePending;
+        private bool stateFadePending;
         private readonly Timer animationTimer;
         private readonly Stopwatch animationClock = new Stopwatch();
 
@@ -54,7 +67,7 @@ namespace MacroDeck
         protected ChromeForm(bool resizable)
         {
             canResize = resizable;
-            animateOpen = !resizable;
+            animateOpen = true;
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = resizable;
             MinimizeBox = resizable;
@@ -139,16 +152,24 @@ namespace MacroDeck
         {
             if (value && animateOpen && !IsDisposed)
             {
+                allowClose = false;
+                if (animationTimer != null && animationTimer.Enabled) animationTimer.Stop();
+                animationMode = 0;
                 Opacity = 0;
                 fadeInPending = true;
             }
+            else if (!value) fadeInPending = false;
             base.SetVisibleCore(value);
         }
 
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            if (fadeInPending) { fadeInPending = false; BeginFadeIn(); }
+            if (fadeInPending)
+            {
+                fadeInPending = false;
+                QueueFadeIn();
+            }
         }
 
         protected override void OnVisibleChanged(EventArgs e)
@@ -157,7 +178,7 @@ namespace MacroDeck
             if (Visible && fadeInPending)
             {
                 fadeInPending = false;
-                BeginFadeIn();
+                QueueFadeIn();
             }
         }
 
@@ -204,6 +225,18 @@ namespace MacroDeck
                 }
             }
             if (ChromeBar != null && closeButton != null) PositionChromeButtons(null, EventArgs.Empty);
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            FormWindowState previousState = lastWindowState;
+            base.OnResize(e);
+            lastWindowState = WindowState;
+            if (previousState == FormWindowState.Minimized && WindowState != FormWindowState.Minimized && restoreFadePending)
+            {
+                restoreFadePending = false;
+                QueueFadeIn();
+            }
         }
 
         protected void ApplyChromeTheme(Color background, Color foreground, Color surface)
@@ -254,45 +287,115 @@ namespace MacroDeck
 
         private void ToggleMaximized()
         {
-            if (!canResize) return;
-            WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
-            PositionChromeButtons(null, EventArgs.Empty);
+            if (!canResize || animationMode != 0) return;
+            pendingWindowState = WindowState == FormWindowState.Maximized
+                ? FormWindowState.Normal
+                : FormWindowState.Maximized;
+            StartOpacityAnimation(FadeOutWindowState, Opacity, 0, 105);
         }
 
         private void BeginMinimize()
         {
-            if (!canResize || WindowState == FormWindowState.Minimized) return;
-            WindowState = FormWindowState.Minimized;
+            if (!canResize || WindowState == FormWindowState.Minimized || animationMode != 0) return;
+            StartOpacityAnimation(FadeOutMinimize, Opacity, 0, 115);
         }
 
         private void BeginCloseAnimation()
         {
-            if (animationTimer.Enabled) animationTimer.Stop();
-            animationMode = 3; animationClock.Restart(); animationTimer.Start();
+            if (animationMode == FadeOutClose) return;
+            StartOpacityAnimation(FadeOutClose, Opacity, 0, 150);
         }
 
         private void BeginFadeIn()
         {
-            if (animationTimer.Enabled) animationTimer.Stop();
-            animationMode = 1; animationClock.Restart(); Opacity = 0;
+            StartOpacityAnimation(FadeIn, Opacity, 1, 180);
+        }
+
+        protected void CloseWithAnimation(DialogResult result)
+        {
+            animatedDialogResult = result;
+            BeginCloseAnimation();
+        }
+
+        private void QueueFadeIn()
+        {
+            if (fadeInScheduled || IsDisposed || !IsHandleCreated) return;
+            fadeInScheduled = true;
+            try
+            {
+                BeginInvoke((MethodInvoker)delegate
+                {
+                    fadeInScheduled = false;
+                    if (IsDisposed || !Visible) return;
+                    PerformLayout();
+                    Invalidate(true);
+                    Update();
+                    BeginFadeIn();
+                });
+            }
+            catch (InvalidOperationException) { fadeInScheduled = false; }
+        }
+
+        private void StartOpacityAnimation(int mode, double from, double to, double durationMs)
+        {
+            StopAnimation();
+            animationMode = mode;
+            animationFromOpacity = (float)Math.Max(0, Math.Min(1, from));
+            animationToOpacity = (float)Math.Max(0, Math.Min(1, to));
+            animationDurationMs = Math.Max(1, durationMs);
+            animationClock.Restart();
             animationTimer.Start();
+        }
+
+        private void StopAnimation()
+        {
+            if (animationTimer.Enabled) animationTimer.Stop();
+            animationClock.Stop();
+            animationMode = 0;
         }
 
         private void AnimateWindow(object sender, EventArgs e)
         {
-            float progress = Math.Min(1f, (float)(animationClock.Elapsed.TotalMilliseconds / 160.0));
+            float progress = Math.Min(1f, (float)(animationClock.Elapsed.TotalMilliseconds / animationDurationMs));
             float eased = progress * progress * (3f - 2f * progress);
-            if (animationMode == 1) Opacity = eased;
-            else if (animationMode == 3) Opacity = 1f - eased;
+            if (animationMode == FadeIn || animationMode == FadeOutClose || animationMode == FadeOutMinimize || animationMode == FadeOutWindowState)
+            {
+                Opacity = animationFromOpacity + (animationToOpacity - animationFromOpacity) * eased;
+            }
             if (progress < 1f) return;
             animationTimer.Stop();
             animationClock.Stop();
             int completedMode = animationMode; animationMode = 0;
-            if (completedMode == 1) Opacity = 1;
-            else if (completedMode == 3)
+            if (completedMode == FadeIn) Opacity = 1;
+            else if (completedMode == FadeOutClose)
             {
+                if (animatedDialogResult != DialogResult.None)
+                {
+                    DialogResult = animatedDialogResult;
+                    animatedDialogResult = DialogResult.None;
+                }
                 allowClose = true;
                 Close();
+            }
+            else if (completedMode == FadeOutMinimize)
+            {
+                restoreFadePending = true;
+                WindowState = FormWindowState.Minimized;
+            }
+            else if (completedMode == FadeOutWindowState)
+            {
+                stateFadePending = true;
+                WindowState = pendingWindowState;
+                try
+                {
+                    BeginInvoke((MethodInvoker)delegate
+                    {
+                        if (!stateFadePending || IsDisposed || WindowState == FormWindowState.Minimized) return;
+                        stateFadePending = false;
+                        QueueFadeIn();
+                    });
+                }
+                catch (InvalidOperationException) { stateFadePending = false; }
             }
         }
 
@@ -319,7 +422,7 @@ namespace MacroDeck
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing && animationTimer != null) animationTimer.Dispose();
+            if (disposing && animationTimer != null) { animationTimer.Stop(); animationTimer.Dispose(); }
             base.Dispose(disposing);
         }
     }
