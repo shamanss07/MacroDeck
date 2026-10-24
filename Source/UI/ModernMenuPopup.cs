@@ -20,7 +20,7 @@ namespace MacroDeck
         private Color edge;
         public event Action<int> ItemChosen;
 
-        public ModernMenuPopup(ThemePalette palette)
+        public ModernMenuPopup(ThemePalette palette, string language)
         {
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = false;
@@ -31,8 +31,8 @@ namespace MacroDeck
             Padding = new Padding(1);
             DoubleBuffered = true;
             edge = palette.Border;
-            optionsButton = MakeItem("Opções");
-            aboutButton = MakeItem("Sobre MacroDeck");
+            optionsButton = MakeItem(Localization.Translate(language, "Opções"));
+            aboutButton = MakeItem(Localization.Translate(language, "Sobre MacroDeck"));
             optionsButton.SetBounds(6, 6, 182, 39);
             aboutButton.SetBounds(6, 51, 182, 39);
             optionsButton.Click += delegate { Choose(0); };

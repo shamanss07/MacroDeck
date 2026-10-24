@@ -40,6 +40,7 @@
     <Compile Include="UI\UiSounds.cs" />
     <Compile Include="UI\ModernMenuPopup.cs" />
     <Compile Include="UI\OptionsForm.cs" />
+    <Compile Include="UI\Localization.cs" />
     <Compile Include="Services\WindowsFolderPicker.cs" />
   </ItemGroup>
   <ItemGroup>

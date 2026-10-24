@@ -3,12 +3,13 @@ name: Build Windows
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -19,7 +20,19 @@ jobs:
 
       - name: Build MacroDeck
         shell: pwsh
-        run: msbuild Source\MacroDeck.csproj /nologo /m /p:Configuration=Release /p:Platform=AnyCPU
+        run: |
+          $vswhere = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio\Installer\vswhere.exe'
+          if (-not (Test-Path -LiteralPath $vswhere)) {
+            throw 'Visual Studio discovery tool was not found on the hosted runner.'
+          }
+
+          $msbuild = & $vswhere -latest -products '*' -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
+          if ([String]::IsNullOrWhiteSpace($msbuild)) {
+            throw 'MSBuild was not found in the Visual Studio installation.'
+          }
+
+          & $msbuild Source\MacroDeck.csproj /nologo /m /p:Configuration=Release /p:Platform=AnyCPU
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify build output
         shell: pwsh
@@ -27,3 +40,45 @@ jobs:
           if (-not (Test-Path 'Source\bin\Release\MacroDeck.exe')) {
             throw 'MacroDeck.exe was not produced by MSBuild.'
           }
+
+      - name: Prepare release executable
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          if ($tag -notmatch '^v(\d+\.\d+\.\d+)$') {
+            throw "Release tags must use the vMAJOR.MINOR.PATCH format. Received: $tag"
+          }
+          $version = $Matches[1]
+          Copy-Item 'Source\bin\Release\MacroDeck.exe' "MacroDeck-$version.exe"
+          "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $headers = @{
+            Authorization = "Bearer $env:GITHUB_TOKEN"
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $releaseNotes = @"
+          MacroDeck $env:RELEASE_VERSION is available for Windows.
+
+          See the [English changelog](https://github.com/$env:GITHUB_REPOSITORY/blob/main/CHANGELOG.md) or [Portuguese changelog](https://github.com/$env:GITHUB_REPOSITORY/blob/main/CHANGELOG.pt-BR.md).
+          "@
+          $release = @{
+            tag_name = $env:GITHUB_REF_NAME
+            name = "MacroDeck $env:RELEASE_VERSION"
+            body = $releaseNotes
+            draft = $false
+            prerelease = $false
+          } | ConvertTo-Json
+          $releaseResponse = Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases" -Method Post -Headers $headers -ContentType 'application/json' -Body $release
+          $assetName = "MacroDeck-$env:RELEASE_VERSION.exe"
+          $assetPath = Join-Path $env:GITHUB_WORKSPACE $assetName
+          $uploadUrl = ($releaseResponse.upload_url -replace '\{\?name,label\}$', '') + '?name=' + [Uri]::EscapeDataString($assetName)
+          Invoke-RestMethod -Uri $uploadUrl -Method Post -Headers $headers -ContentType 'application/octet-stream' -InFile $assetPath | Out-Null
+          Write-Host "Published $assetName to $($releaseResponse.html_url)"

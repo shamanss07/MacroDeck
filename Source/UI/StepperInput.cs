@@ -31,6 +31,12 @@ namespace MacroDeck
             set { int next = Math.Max(minimum, Math.Min(maximum, value)); if (this.value == next) { valueBox.Text = next.ToString(); return; } this.value = next; valueBox.Text = next.ToString(); EventHandler changed = ValueChanged; if (changed != null) changed(this, EventArgs.Empty); }
         }
 
+        public void ApplyLanguage(string language)
+        {
+            upButton.AccessibleName = Localization.Translate(language, "Aumentar valor");
+            downButton.AccessibleName = Localization.Translate(language, "Diminuir valor");
+        }
+
         public StepperInput()
         {
             Height = 34; Width = 104; BackColor = Color.FromArgb(41, 46, 56); ForeColor = Color.White;

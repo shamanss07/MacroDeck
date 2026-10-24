@@ -1,60 +1,67 @@
 # MacroDeck
 
-Gravador e reprodutor de macros para Windows. A primeira versão pública planejada é a **1.0.0**; o código atual reúne a versão mais recente do desenvolvimento até essa primeira publicação.
+[English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
-## Créditos
+A Windows macro recorder and player. **Version 1.1.0** adds English language support while keeping Brazilian Portuguese available.
 
-Desenvolvido por [shamanss07](https://github.com/shamanss07), com assistência do ChatGPT (OpenAI) na implementação e revisão do projeto.
+## Credits
 
-![Logo MacroDeck](Source/Assets/Branding/MacroDeck-Logo.png)
+Developed by [shamanss07](https://github.com/shamanss07), with implementation and review assistance from ChatGPT (OpenAI).
 
-## Recursos
+![MacroDeck logo](Source/Assets/Branding/MacroDeck-Logo.png)
 
-- Grava e reproduz ações de teclado e mouse.
-- Permite testar uma gravação antes de salvá-la e organizar macros em arquivos JSON.
-- Oferece atalhos globais configuráveis, repetição e intervalo entre ciclos.
-- Inclui temas claro e escuro, personalização de cores e seleção de fontes instaladas.
-- Mantém as preferências do usuário entre execuções.
-- Inclui uma área reservada para o desenvolvimento futuro do Auto-Clicker.
+## Features
 
-## Compatibilidade
+- Record and play back keyboard and mouse actions.
+- Preview a recording before saving it, and organize macros as JSON files.
+- Configure global shortcuts, repetition, and the delay between cycles.
+- Use light and dark themes, customize colors, and select installed fonts.
+- Keep preferences between sessions.
+- Choose Portuguese (Brazil) or English for the app interface in **Menu → Settings**; changes apply immediately. On first launch, MacroDeck uses the Windows UI language when it is English and otherwise defaults to Portuguese (Brazil).
+- Includes a placeholder for the future Auto-Clicker feature.
 
-O suporte inicial é **somente para Windows**. O programa foi desenvolvido em C# com Windows Forms e requer o **.NET Framework 4.8**. Linux e macOS não são suportados nesta versão.
+## Compatibility
 
-## Instalação e uso
+The initial release supports **Windows only**. MacroDeck is built with C# and Windows Forms and requires **.NET Framework 4.8**. Linux and macOS are not supported in this release.
 
-Baixe `MacroDeck-1.0.0.exe` na seção **Releases** do GitHub e execute-o no Windows. Se o .NET Framework 4.8 não estiver instalado, o Windows poderá solicitar sua instalação.
+## Install and use
 
-1. Escolha a pasta onde os macros serão guardados.
-2. Informe um nome e clique em **Gravar**; o atalho padrão é F9.
-3. Clique em **Gravar** novamente ou pressione F9 para parar.
-4. Clique em **Reproduzir** para testar a gravação, ou em **Salvar gravação** para guardá-la.
-5. Selecione um macro salvo e clique em **Reproduzir**; o atalho padrão é F10.
+Download `MacroDeck-1.1.0.exe` from the GitHub **Releases** page and run it on Windows. If .NET Framework 4.8 is not installed, Windows may ask you to install it.
 
-Use **Definir** para alterar um atalho; Esc cancela a captura. **Ciclo Infinito** repete a reprodução até que ela seja interrompida. Os controles de intervalo aceitam minutos e segundos.
+1. Choose the folder where you want to store macros.
+2. Enter a name and click **Record**. The default shortcut is F9.
+3. Click **Record** again or press F9 to stop.
+4. Click **Play** to preview the recording, or click **Save recording** to keep it.
+5. Select a saved macro and click **Play**. The default shortcut is F10.
 
-Macros são arquivos JSON na pasta escolhida. As preferências ficam em `%APPDATA%\MacroDeck\settings.json`. Fechar o programa descarta uma gravação pendente sem perguntar.
+Use **Set** to change a shortcut; Esc cancels shortcut capture. **Repeat indefinitely** keeps playing until you stop it. The delay controls accept minutes and seconds.
 
-## Privacidade
+Macros are JSON files in the selected folder. Preferences are stored in `%APPDATA%\MacroDeck\settings.json`. Closing the app discards an unsaved recording without prompting.
 
-Durante uma gravação, o MacroDeck registra teclas pressionadas e movimentos/cliques do mouse fora da própria janela do aplicativo. Os macros são arquivos JSON sem criptografia e podem conter sequências de teclas e coordenadas do cursor. Não grave senhas ou outras informações sensíveis; guarde e compartilhe os arquivos de macro com cuidado.
+## Privacy
 
-## Compilar a partir do código
+While recording, MacroDeck captures keyboard input and mouse movement/clicks outside its own window. Macro files are unencrypted JSON and may contain keystroke sequences and cursor coordinates. Do not record passwords or other sensitive information, and take care when storing or sharing macro files.
 
-1. Instale o .NET Framework 4.8 Developer Pack no Windows.
-2. Abra o PowerShell na pasta `Source`.
-3. Execute:
+## Build from source
+
+1. Install the .NET Framework 4.8 Developer Pack on Windows.
+2. Open PowerShell in the `Source` folder.
+3. Run:
 
    ```powershell
-   .\build.ps1 -OutputName MacroDeck-1.0.0.exe
+   .\build.ps1 -OutputName MacroDeck-1.1.0.exe
    ```
 
-O executável é criado na pasta raiz do projeto. Também é possível abrir `Source/MacroDeck.csproj` no Visual Studio. A licença OFL em `Source/Assets/Fonts/OFL.txt` cobre a fonte Montserrat incluída, não o código do MacroDeck.
+The executable is created in the project root. You can also open `Source/MacroDeck.csproj` in Visual Studio. The OFL license in `Source/Assets/Fonts/OFL.txt` covers the included Montserrat font, not MacroDeck's code.
 
-## Versões e releases
+## Versions and releases
 
-O repositório público receberá versões estáveis, revisadas e selecionadas para lançamento; iterações locais de desenvolvimento não serão publicadas automaticamente. As versões seguem `MAJOR.MINOR.PATCH`: por exemplo, `1.0.0` para a primeira release, `1.1.0` para uma atualização de recursos e `1.1.1` para uma correção compatível. Cada release terá uma tag Git correspondente, notas em [CHANGELOG.md](CHANGELOG.md) e o executável Windows anexado.
+The public repository receives stable, reviewed releases selected for publication; local development iterations are not published automatically. Versions follow `MAJOR.MINOR.PATCH`: for example, `1.0.0` for the first release, `1.1.0` for a feature update, and `1.1.1` for a compatible bug fix. Each release has a matching Git tag, notes in [CHANGELOG.md](CHANGELOG.md), and a Windows executable.
 
-## Licença
+## License
 
-O código do MacroDeck é disponibilizado sob a licença MIT, em `LICENSE`. A fonte Montserrat incluída tem licença SIL Open Font License 1.1, em `Source/Assets/Fonts/OFL.txt`.
+MacroDeck's code is released under the MIT License in `LICENSE`. The included Montserrat font is licensed under the SIL Open Font License 1.1 in `Source/Assets/Fonts/OFL.txt`.
+
+---
+
+Documentation: [Português (Brasil)](README.pt-BR.md) · [Contributing guide](CONTRIBUTING.md)

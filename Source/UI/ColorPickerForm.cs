@@ -18,31 +18,32 @@ namespace MacroDeck
         private int brightness;
         public Color SelectedColor { get { return selected; } }
 
-        public static Color? PickColor(IWin32Window owner, Color initial, ThemePalette palette)
+        public static Color? PickColor(IWin32Window owner, Color initial, ThemePalette palette, string language)
         {
-            using (ColorPickerForm dialog = new ColorPickerForm(initial, palette))
+            using (ColorPickerForm dialog = new ColorPickerForm(initial, palette, language))
                 return dialog.ShowDialog(owner) == DialogResult.OK ? (Color?)dialog.SelectedColor : null;
         }
 
-        private ColorPickerForm(Color initial, ThemePalette currentPalette) : base(false)
+        private ColorPickerForm(Color initial, ThemePalette currentPalette, string language) : base(false)
         {
+            ApplyChromeLanguage(language);
             palette = currentPalette; selected = initial;
-            Text = "Escolher cor"; ClientSize = new Size(540, 516); BackColor = palette.Background; ForeColor = palette.Text;
+            Text = T(language, "Escolher cor"); ClientSize = new Size(540, 516); BackColor = palette.Background; ForeColor = palette.Text;
             MinimumSize = new Size(480, 478); MaximizeBox = false; MinimizeBox = false;
             ApplyChromeTheme(palette.Background, palette.Text, palette.Card);
 
-            Label title = new Label { Text = "Personalizar cor", AutoSize = true, Location = new Point(24, 20), Font = FontManager.Create(18f, FontStyle.Bold), ForeColor = palette.Text };
-            Label subtitle = new Label { Text = "Digite um valor hexadecimal ou ajuste matiz, saturação e brilho.", AutoSize = true, Location = new Point(26, 55), Font = FontManager.Create(8.5f, FontStyle.Regular), ForeColor = palette.Muted };
+            Label title = new Label { Text = T(language, "Personalizar cor"), AutoSize = true, Location = new Point(24, 20), Font = FontManager.Create(18f, FontStyle.Bold), ForeColor = palette.Text };
+            Label subtitle = new Label { Text = T(language, "Digite um valor hexadecimal ou ajuste matiz, saturação e brilho."), AutoSize = true, Location = new Point(26, 55), Font = FontManager.Create(8.5f, FontStyle.Regular), ForeColor = palette.Muted };
             RoundedPanel card = new RoundedPanel { Location = new Point(20, 88), Size = new Size(500, 310), BackColor = palette.Card, BorderColor = palette.Border, CornerRadius = 15 };
             ContentPanel.Controls.Add(title); ContentPanel.Controls.Add(subtitle); ContentPanel.Controls.Add(card);
 
-            preview = new Label { Text = "Prévia", TextAlign = ContentAlignment.MiddleCenter, Location = new Point(20, 18), Size = new Size(220, 62), Font = FontManager.Create(10f, FontStyle.Bold), BorderStyle = BorderStyle.None };
+            preview = new Label { Text = T(language, "Prévia"), TextAlign = ContentAlignment.MiddleCenter, Location = new Point(20, 18), Size = new Size(220, 62), Font = FontManager.Create(10f, FontStyle.Bold), BorderStyle = BorderStyle.None };
             card.Controls.Add(preview);
             Label hexLabel = new Label { Text = "HEX", AutoSize = true, Location = new Point(260, 22), ForeColor = palette.Muted, Font = FontManager.Create(8f, FontStyle.Bold) };
             hexBox = new TextBox { Location = new Point(258, 43), Size = new Size(216, 30), Font = FontManager.Create(10f, FontStyle.Regular), BorderStyle = BorderStyle.FixedSingle, MaxLength = 7, BackColor = palette.Input, ForeColor = palette.Text, Text = ThemePalette.Hex(initial) };
             card.Controls.Add(hexLabel); card.Controls.Add(hexBox);
 
-            string[] labels = { "Matiz", "Saturação", "Brilho" };
+            string[] labels = { T(language, "Matiz"), T(language, "Saturação"), T(language, "Brilho") };
             for (int i = 0; i < 3; i++)
             {
                 int y = 99 + i * 51;
@@ -52,7 +53,7 @@ namespace MacroDeck
                 card.Controls.Add(channelLabel); card.Controls.Add(sliders[i]);
             }
 
-            Label presetsLabel = new Label { Text = "Cores rápidas", AutoSize = true, Location = new Point(22, 259), Font = FontManager.Create(8f, FontStyle.Bold), ForeColor = palette.Muted };
+            Label presetsLabel = new Label { Text = T(language, "Cores rápidas"), AutoSize = true, Location = new Point(22, 259), Font = FontManager.Create(8f, FontStyle.Bold), ForeColor = palette.Muted };
             card.Controls.Add(presetsLabel);
             Color[] presets = { Color.FromArgb(87,112,224), Color.FromArgb(34,197,154), Color.FromArgb(244,114,92), Color.FromArgb(247,185,85), Color.FromArgb(171,115,234), Color.FromArgb(239,68,110), Color.FromArgb(31,39,51), Color.White };
             for (int i = 0; i < presets.Length; i++)
@@ -63,14 +64,16 @@ namespace MacroDeck
                 card.Controls.Add(swatch);
             }
 
-            RoundedButton cancel = new RoundedButton { Text = "Cancelar", Location = new Point(316, 416), Size = new Size(96, 38), CornerRadius = 10, BackColor = palette.Input, ForeColor = palette.Text, Font = FontManager.Create(8.5f, FontStyle.Bold), DialogResult = DialogResult.Cancel };
-            RoundedButton apply = new RoundedButton { Text = "Usar cor", Location = new Point(424, 416), Size = new Size(96, 38), CornerRadius = 10, BackColor = palette.Accent, ForeColor = Color.White, Font = FontManager.Create(8.5f, FontStyle.Bold), DialogResult = DialogResult.OK };
+            RoundedButton cancel = new RoundedButton { Text = T(language, "Cancelar"), Location = new Point(316, 416), Size = new Size(96, 38), CornerRadius = 10, BackColor = palette.Input, ForeColor = palette.Text, Font = FontManager.Create(8.5f, FontStyle.Bold), DialogResult = DialogResult.Cancel };
+            RoundedButton apply = new RoundedButton { Text = T(language, "Usar cor"), Location = new Point(424, 416), Size = new Size(96, 38), CornerRadius = 10, BackColor = palette.Accent, ForeColor = Color.White, Font = FontManager.Create(8.5f, FontStyle.Bold), DialogResult = DialogResult.OK };
             ContentPanel.Controls.Add(cancel); ContentPanel.Controls.Add(apply);
             AcceptButton = apply; CancelButton = cancel;
             hexBox.TextChanged += HexChanged;
             hexBox.Validated += delegate { ParseHex(); };
             UpdateColorControls();
         }
+
+        private static string T(string language, string text) { return Localization.Translate(language, text); }
 
         private void SliderChanged(object sender, EventArgs e)
         {

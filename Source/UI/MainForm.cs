@@ -25,6 +25,7 @@ namespace MacroDeck
         private static readonly int CurrentProcessId = Process.GetCurrentProcess().Id;
 
         private AppSettings settings;
+        private string uiLanguage = "pt-BR";
         private NativeHooks hooks;
         private List<MacroEvent> pendingEvents;
         private readonly Stopwatch recordClock = new Stopwatch();
@@ -88,6 +89,8 @@ namespace MacroDeck
         public MainForm() : base(true)
         {
             settings = LoadSettings();
+            uiLanguage = settings.Language;
+            ApplyChromeLanguage(uiLanguage);
             FontManager.SetPreferredFamily(settings.FontFamily);
             palette = ThemePalette.From(settings);
             Text = "MacroDeck";
@@ -105,7 +108,7 @@ namespace MacroDeck
             try { hooks = new NativeHooks(this); }
             catch (Exception ex)
             {
-                MessageBox.Show(this, ex.Message + "\r\n\r\nExecute este programa em uma sessão interativa do Windows.", "Captura indisponível", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, Tr(ex.Message) + "\r\n\r\n" + Tr("Execute este programa em uma sessão interativa do Windows."), Tr("Captura indisponível"), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
             recordHotkey = Hotkey.Parse(settings.RecordHotkey);
@@ -129,6 +132,8 @@ namespace MacroDeck
                 if (Hotkey.Parse(loaded.PlayHotkey) != null) s.PlayHotkey = loaded.PlayHotkey;
                 s.DarkTheme = loaded.DarkTheme;
                 s.FontFamily = loaded.FontFamily ?? "";
+                if (String.Equals(loaded.Language, "en-US", StringComparison.OrdinalIgnoreCase)) s.Language = "en-US";
+                else if (String.Equals(loaded.Language, "pt-BR", StringComparison.OrdinalIgnoreCase)) s.Language = "pt-BR";
                 s.BackgroundColor = loaded.BackgroundColor ?? "";
                 s.CardColor = loaded.CardColor ?? "";
                 s.TextColor = loaded.TextColor ?? "";
@@ -186,12 +191,12 @@ namespace MacroDeck
 
             headerPanel = new Panel { Dock = DockStyle.Fill, Tag = "surface" };
             titleLabel = new Label { Text = "MacroDeck", AutoSize = true, Location = new Point(0, 0), Font = FontManager.Create(22f, FontStyle.Bold), ForeColor = palette.Text };
-            subtitleLabel = new Label { Text = "Grave, organize e reproduza ações.", AutoSize = true, Location = new Point(2, 42), Font = FontManager.Create(8.5f, FontStyle.Regular), ForeColor = palette.Muted, Tag = "muted" };
+            subtitleLabel = new Label { Text = Tr("Grave, organize e reproduza ações."), AutoSize = true, Location = new Point(2, 42), Font = FontManager.Create(8.5f, FontStyle.Regular), ForeColor = palette.Muted, Tag = "muted" };
             macroNavButton = MakeButton("Macro", 0, 25, 88, 38, true);
             macroNavButton.Click += delegate { SetActivePage(false); };
             clickerNavButton = MakeButton("Auto-Clicker", 0, 25, 128, 38, false);
             clickerNavButton.Click += delegate { SetActivePage(true); };
-            themeButton = MakeButton("Claro", 0, 25, 94, 38, false);
+            themeButton = MakeButton(Tr("Claro"), 0, 25, 94, 38, false);
             themeButton.Icon = "sun";
             themeButton.Click += delegate
             {
@@ -218,10 +223,10 @@ namespace MacroDeck
 
             CreateAppMenu();
             toolTips = new ModernToolTip();
-            toolTips.SetToolTip(deleteSelectedButton, "Apaga somente o macro selecionado. O aplicativo pedirá confirmação.", this);
-            toolTips.SetToolTip(deleteAllButton, "Apaga todos os macros válidos desta pasta. O aplicativo pedirá confirmação.", this);
-            toolTips.SetToolTip(saveButton, "Salva a gravação atual como um novo macro.", this);
-            toolTips.SetToolTip(refreshButton, "Atualiza a lista de macros salvos.", this);
+            toolTips.SetToolTip(deleteSelectedButton, Tr("Apaga somente o macro selecionado. O aplicativo pedirá confirmação."), this);
+            toolTips.SetToolTip(deleteAllButton, Tr("Apaga todos os macros válidos desta pasta. O aplicativo pedirá confirmação."), this);
+            toolTips.SetToolTip(saveButton, Tr("Salva a gravação atual como um novo macro."), this);
+            toolTips.SetToolTip(refreshButton, Tr("Atualiza a lista de macros salvos."), this);
             PositionHeaderActions(null, EventArgs.Empty);
             root.ResumeLayout(true);
             ResumeLayout(true);
@@ -255,16 +260,16 @@ namespace MacroDeck
 
             RoundedPanel actions = CreateCard();
             actions.Dock = DockStyle.Fill;
-            AddSectionTitle(actions, "GRAVAÇÃO E REPRODUÇÃO", 19, 13);
-            recordButton = MakeButton("Gravar", 19, 43, 220, 54, true);
+            AddSectionTitle(actions, Tr("GRAVAÇÃO E REPRODUÇÃO"), 19, 13);
+            recordButton = MakeButton(Tr("Gravar"), 19, 43, 220, 54, true);
             recordButton.Icon = "record";
             recordButton.Font = FontManager.Create(10f, FontStyle.Bold);
             recordButton.Click += delegate { ToggleRecording(); };
-            playButton = MakeButton("Reproduzir", 250, 43, 220, 54, true);
+            playButton = MakeButton(Tr("Reproduzir"), 250, 43, 220, 54, true);
             playButton.Icon = "play";
             playButton.Font = FontManager.Create(10f, FontStyle.Bold);
             playButton.Click += delegate { TogglePlayback(); };
-            statusLabel = new Label { Text = "Pronto", AutoSize = false, Location = new Point(20, 107), Size = new Size(500, 22), Font = FontManager.Create(8.5f, FontStyle.Bold), ForeColor = palette.Muted };
+            statusLabel = new Label { Text = Tr("Pronto"), AutoSize = false, Location = new Point(20, 107), Size = new Size(500, 22), Font = FontManager.Create(8.5f, FontStyle.Bold), ForeColor = palette.Muted };
             actions.Controls.Add(recordButton); actions.Controls.Add(playButton); actions.Controls.Add(statusLabel);
             actions.Resize += delegate
             {
@@ -278,12 +283,13 @@ namespace MacroDeck
 
             RoundedPanel macroCard = CreateCard();
             macroCard.Dock = DockStyle.Fill;
-            AddSectionTitle(macroCard, "BIBLIOTECA DE MACROS", 19, 14);
-            macroCard.Controls.Add(MakeCaption("Nome da nova gravação", 20, 47));
-            nameBox = new ModernTextBox { Text = "Nova gravação", Location = new Point(19, 68), Width = 365, Height = 30, Font = FontManager.Create(9.5f, FontStyle.Regular) };
+            AddSectionTitle(macroCard, Tr("BIBLIOTECA DE MACROS"), 19, 14);
+            macroCard.Controls.Add(MakeCaption(Tr("Nome da nova gravação"), 20, 47));
+            nameBox = new ModernTextBox { Text = Tr("Nova gravação"), Location = new Point(19, 68), Width = 365, Height = 30, Font = FontManager.Create(9.5f, FontStyle.Regular) };
             macroCard.Controls.Add(nameBox);
-            macroCard.Controls.Add(MakeCaption("Macros salvos", 20, 105));
+            macroCard.Controls.Add(MakeCaption(Tr("Macros salvos"), 20, 105));
             macroCombo = new MacroSelector { Location = new Point(19, 127), Width = 270, Height = 36, Font = FontManager.Create(8.5f, FontStyle.Regular) };
+            macroCombo.Language = uiLanguage;
             macroCombo.ApplyTheme(palette);
             macroCombo.SelectedIndexChanged += delegate
             {
@@ -294,15 +300,15 @@ namespace MacroDeck
             };
             refreshButton = MakeButton("", 0, 128, 34, 34, false);
             refreshButton.Icon = "refresh";
-            refreshButton.AccessibleName = "Atualizar macros";
+            refreshButton.AccessibleName = Tr("Atualizar macros");
             refreshButton.Click += delegate { LoadMacros(); };
             deleteSelectedButton = MakeButton("", 0, 128, 34, 34, false);
             deleteSelectedButton.Icon = "trash";
-            deleteSelectedButton.AccessibleName = "Apagar macro selecionado";
+            deleteSelectedButton.AccessibleName = Tr("Apagar macro selecionado");
             deleteSelectedButton.Click += delegate { DeleteSelectedMacro(); };
             deleteAllButton = MakeButton("", 0, 128, 34, 34, false);
             deleteAllButton.Icon = "trash-all";
-            deleteAllButton.AccessibleName = "Apagar todos os macros";
+            deleteAllButton.AccessibleName = Tr("Apagar todos os macros");
             deleteAllButton.Click += delegate { DeleteAllMacros(); };
             macroCard.Controls.Add(macroCombo); macroCard.Controls.Add(refreshButton);
             macroCard.Controls.Add(deleteSelectedButton); macroCard.Controls.Add(deleteAllButton);
@@ -315,9 +321,9 @@ namespace MacroDeck
                 deleteSelectedButton.Left = refreshButton.Right + 6;
                 deleteAllButton.Left = deleteSelectedButton.Right + 6;
             };
-            eventsLabel = new Label { Text = "Nenhum macro salvo", AutoSize = false, Location = new Point(20, 166), Size = new Size(410, 22), Font = FontManager.Create(8.2f, FontStyle.Regular), Tag = "muted" };
+            eventsLabel = new Label { Text = Tr("Nenhum macro salvo"), AutoSize = false, Location = new Point(20, 166), Size = new Size(410, 22), Font = FontManager.Create(8.2f, FontStyle.Regular), Tag = "muted" };
             macroCard.Controls.Add(eventsLabel);
-            saveButton = MakeButton("Salvar gravação", 19, 197, 148, 36, true);
+            saveButton = MakeButton(Tr("Salvar gravação"), 19, 197, 148, 36, true);
             saveButton.Enabled = false;
             saveButton.Click += delegate { SaveRecording(); };
             macroCard.Controls.Add(saveButton);
@@ -325,25 +331,25 @@ namespace MacroDeck
 
             RoundedPanel folderCard = CreateCard();
             folderCard.Dock = DockStyle.Fill;
-            AddSectionTitle(folderCard, "PASTA DE MACROS", 19, 14);
-            folderLabel = MakeCaption("Escolha onde organizar seus macros.", 20, 50);
+            AddSectionTitle(folderCard, Tr("PASTA DE MACROS"), 19, 14);
+            folderLabel = MakeCaption(Tr("Escolha onde organizar seus macros."), 20, 50);
             folderCard.Controls.Add(folderLabel);
             folderBox = new ModernTextBox { Text = settings.Folder, Location = new Point(19, 80), Width = 347, Height = 32, ReadOnly = true, Font = FontManager.Create(9f, FontStyle.Regular) };
             folderCard.Controls.Add(folderBox);
             folderCard.Resize += delegate { folderBox.Width = Math.Max(180, folderCard.ClientSize.Width - 40); };
-            folderButton = MakeButton("Escolher pasta", 19, 124, 144, 38, false);
+            folderButton = MakeButton(Tr("Escolher pasta"), 19, 124, 144, 38, false);
             folderButton.Click += ChooseFolder;
             folderCard.Controls.Add(folderButton);
-            Label saveHint = MakeCaption("Gravações novas só são salvas ao clicar em Salvar gravação.", 20, 180);
+            Label saveHint = MakeCaption(Tr("Gravações novas só são salvas ao clicar em Salvar gravação."), 20, 180);
             saveHint.Tag = "muted";
             folderCard.Controls.Add(saveHint);
             grid.Controls.Add(folderCard, 1, 1);
 
             RoundedPanel keyCard = CreateCard();
             keyCard.Dock = DockStyle.Fill;
-            AddSectionTitle(keyCard, "ATALHOS GLOBAIS", 19, 14);
-            recordKeyLabel = MakeCaption("Gravar/Parar", 20, 57);
-            playKeyLabel = MakeCaption("Reproduzir/Parar", 20, 108);
+            AddSectionTitle(keyCard, Tr("ATALHOS GLOBAIS"), 19, 14);
+            recordKeyLabel = MakeCaption(Tr("Gravar/Parar"), 20, 57);
+            playKeyLabel = MakeCaption(Tr("Reproduzir/Parar"), 20, 108);
             recordKeyLabel.Font = FontManager.Create(8.5f, FontStyle.Bold);
             playKeyLabel.Font = FontManager.Create(8.5f, FontStyle.Bold);
             recordKeyValue = MakeCaption("", 160, 57); recordKeyValue.Font = FontManager.Create(8.5f, FontStyle.Bold);
@@ -351,9 +357,9 @@ namespace MacroDeck
             keyStatusLabel = MakeCaption("", 20, 138); keyStatusLabel.Font = FontManager.Create(7.5f, FontStyle.Regular); keyStatusLabel.Tag = "muted";
             keyCard.Controls.Add(recordKeyLabel); keyCard.Controls.Add(playKeyLabel);
             keyCard.Controls.Add(recordKeyValue); keyCard.Controls.Add(playKeyValue); keyCard.Controls.Add(keyStatusLabel);
-            setRecordKeyButton = MakeButton("Definir", 0, 49, 100, 36, false);
+            setRecordKeyButton = MakeButton(Tr("Definir"), 0, 49, 100, 36, false);
             setRecordKeyButton.Click += delegate { BeginCapture(true); };
-            setPlayKeyButton = MakeButton("Definir", 0, 100, 100, 36, false);
+            setPlayKeyButton = MakeButton(Tr("Definir"), 0, 100, 100, 36, false);
             setPlayKeyButton.Click += delegate { BeginCapture(false); };
             keyCard.Controls.Add(setRecordKeyButton); keyCard.Controls.Add(setPlayKeyButton);
             keyCard.Resize += delegate
@@ -367,15 +373,16 @@ namespace MacroDeck
 
             RoundedPanel intervalCard = CreateCard();
             intervalCard.Dock = DockStyle.Fill;
-            AddSectionTitle(intervalCard, "REPETIÇÃO", 19, 14);
-            infiniteCheck = new AnimatedToggle { Text = "Ciclo Infinito", Location = new Point(20, 49), Width = 150, Height = 30, Font = FontManager.Create(8.5f, FontStyle.Bold), BackColor = palette.Card };
+            AddSectionTitle(intervalCard, Tr("REPETIÇÃO"), 19, 14);
+            infiniteCheck = new AnimatedToggle { Text = Tr("Ciclo Infinito"), Location = new Point(20, 49), Width = 150, Height = 30, Font = FontManager.Create(8.5f, FontStyle.Bold), BackColor = palette.Card };
             infiniteCheck.SetInitialChecked(settings.CycleInfinite);
             infiniteCheck.ApplyTheme(palette.Accent, palette.Text);
             infiniteCheck.CheckedChanged += delegate { settings.CycleInfinite = infiniteCheck.Checked; settings.Repeat = infiniteCheck.Checked; SaveSettings(); };
             intervalCard.Controls.Add(infiniteCheck);
-            intervalCard.Controls.Add(MakeCaption("Pausa após cada ciclo", 20, 86));
+            intervalCard.Controls.Add(MakeCaption(Tr("Pausa após cada ciclo"), 20, 86));
             minutesInput = new StepperInput { Location = new Point(20, 111), Width = 104, Minimum = 0, Maximum = 9999, Suffix = "min", Value = Math.Max(0, Math.Min(settings.IntervalMinutes, 9999)) };
             secondsInput = new StepperInput { Location = new Point(138, 111), Width = 104, Minimum = 0, Maximum = 59, Suffix = "s", Value = Math.Max(0, Math.Min(settings.IntervalSeconds, 59)) };
+            minutesInput.ApplyLanguage(uiLanguage); secondsInput.ApplyLanguage(uiLanguage);
             intervalCard.Controls.Add(minutesInput); intervalCard.Controls.Add(secondsInput);
             minutesInput.ValueChanged += delegate { SaveIntervalSettings(); };
             secondsInput.ValueChanged += delegate { SaveIntervalSettings(); };
@@ -388,7 +395,7 @@ namespace MacroDeck
             autoClickerPage = new BufferedPanel { Dock = DockStyle.Fill, Visible = false, Tag = "surface" };
             pageHost.Controls.Add(autoClickerPage);
             autoClickerTitle = new Label { Text = "Auto-Clicker", AutoSize = true, Font = FontManager.Create(22f, FontStyle.Bold), ForeColor = palette.Text };
-            autoClickerHint = new Label { Text = "Em desenvolvimento", AutoSize = true, Font = FontManager.Create(9f, FontStyle.Regular), ForeColor = palette.Muted, Tag = "muted" };
+            autoClickerHint = new Label { Text = Tr("Em desenvolvimento"), AutoSize = true, Font = FontManager.Create(9f, FontStyle.Regular), ForeColor = palette.Muted, Tag = "muted" };
             autoClickerPage.Controls.Add(autoClickerTitle); autoClickerPage.Controls.Add(autoClickerHint);
             autoClickerPage.Resize += delegate
             {
@@ -470,7 +477,7 @@ namespace MacroDeck
 
         private void CreateAppMenu()
         {
-            appMenu = new ModernMenuPopup(palette);
+            appMenu = new ModernMenuPopup(palette, uiLanguage);
             appMenu.ItemChosen += delegate(int item) { if (item == 0) ShowOptions(); else ShowAbout(); };
         }
 
@@ -487,11 +494,12 @@ namespace MacroDeck
 
         private void ShowOptions()
         {
-            if (optionsDialog == null || optionsDialog.IsDisposed) optionsDialog = new OptionsForm(settings, palette);
+            if (optionsDialog == null || optionsDialog.IsDisposed) optionsDialog = new OptionsForm(settings, palette, uiLanguage);
             optionsDialog.RefreshPalette(palette);
             optionsDialog.DialogResult = DialogResult.None;
             if (optionsDialog.ShowDialog(this) == DialogResult.OK)
             {
+                string previousLanguage = settings.Language;
                 if (settings.DarkTheme)
                 {
                     settings.DarkBackgroundColor = optionsDialog.BackgroundHex ?? "";
@@ -507,20 +515,69 @@ namespace MacroDeck
                     settings.LightAccentColor = optionsDialog.AccentHex ?? "";
                 }
                 settings.FontFamily = optionsDialog.SelectedFontFamily;
+                settings.Language = optionsDialog.SelectedLanguage;
                 FontManager.SetPreferredFamily(settings.FontFamily);
-                ApplyFontTree(this);
-                if (toolTips != null) toolTips.ApplyFont(FontManager.Create(8.5f, FontStyle.Regular));
-                if (optionsDialog != null && !optionsDialog.IsDisposed) ApplyFontTree(optionsDialog);
-                if (aboutDialog != null && !aboutDialog.IsDisposed) ApplyFontTree(aboutDialog);
                 palette = ThemePalette.From(settings);
                 SaveSettings();
-                ApplyTheme();
+                if (!String.Equals(previousLanguage, settings.Language, StringComparison.OrdinalIgnoreCase))
+                    RebuildUiForLanguage();
+                else
+                {
+                    ApplyFontTree(this);
+                    if (toolTips != null) toolTips.ApplyFont(FontManager.Create(8.5f, FontStyle.Regular));
+                    ApplyTheme();
+                }
             }
+        }
+
+        private void RebuildUiForLanguage()
+        {
+            bool showClickerPage = activeClickerPage;
+            if (pageTransitionTimer != null)
+            {
+                if (pageTransitionTimer.Enabled) UiAnimationClock.End();
+                pageTransitionTimer.Stop();
+                pageTransitionTimer.Dispose();
+                pageTransitionTimer = null;
+            }
+            pageTransitionClock.Stop();
+
+            if (appMenu != null) { appMenu.Dispose(); appMenu = null; }
+            if (toolTips != null) { toolTips.Dispose(); toolTips = null; }
+            if (optionsDialog != null) { optionsDialog.Dispose(); optionsDialog = null; }
+            if (aboutDialog != null) { aboutDialog.Dispose(); aboutDialog = null; }
+
+            while (ContentPanel.Controls.Count > 0)
+            {
+                Control oldControl = ContentPanel.Controls[0];
+                ContentPanel.Controls.RemoveAt(0);
+                oldControl.Dispose();
+            }
+
+            uiLanguage = settings.Language;
+            ApplyChromeLanguage(uiLanguage);
+            activeClickerPage = showClickerPage;
+            BuildUi();
+            macroPage.Visible = !showClickerPage;
+            autoClickerPage.Visible = showClickerPage;
+            macroPage.Dock = DockStyle.Fill;
+            autoClickerPage.Dock = DockStyle.Fill;
+            ApplyFontTree(this);
+            ApplyTheme();
+            UpdateHotkeyLabels();
+
+            if (!recording && pendingEvents != null && pendingEvents.Count > 0)
+                eventsLabel.Text = Tr("Gravação não salva · pronta para testar ou salvar");
+            else
+                eventsLabel.Text = "";
+
+            UpdateRuntimeUi(recording ? "Gravando" : (playing ? "Reproduzindo" : "Pronto"), "", recording || playing);
+            LoadMacros();
         }
 
         private void ShowAbout()
         {
-            if (aboutDialog == null || aboutDialog.IsDisposed) aboutDialog = new AboutForm(palette);
+            if (aboutDialog == null || aboutDialog.IsDisposed) aboutDialog = new AboutForm(palette, uiLanguage);
             aboutDialog.RefreshPalette(palette);
             aboutDialog.DialogResult = DialogResult.None;
             aboutDialog.ShowDialog(this);
@@ -534,6 +591,11 @@ namespace MacroDeck
             settings.Interval = settings.IntervalMinutes * 60 + settings.IntervalSeconds;
             settings.IntervalUnit = "segundos";
             SaveSettings();
+        }
+
+        private string Tr(string portugueseText)
+        {
+            return Localization.Translate(uiLanguage, portugueseText);
         }
 
         private RoundedPanel CreateCard()
@@ -563,7 +625,7 @@ namespace MacroDeck
             ForeColor = palette.Text;
             ApplyChromeTheme(palette.Background, palette.Text, palette.Card);
             foreach (Control c in ContentPanel.Controls) ApplyControlTheme(c);
-            themeButton.Text = settings.DarkTheme ? "Claro" : "Escuro";
+            themeButton.Text = Tr(settings.DarkTheme ? "Claro" : "Escuro");
             themeButton.Icon = settings.DarkTheme ? "sun" : "moon";
             clickerNavButton.Tag = activeClickerPage ? "selected" : "secondary";
             macroNavButton.Tag = activeClickerPage ? "secondary" : "selected";
@@ -700,10 +762,10 @@ namespace MacroDeck
 
         private void UpdateHotkeyLabels()
         {
-            if (recordKeyLabel != null) recordKeyLabel.Text = "Gravar/Parar";
-            if (playKeyLabel != null) playKeyLabel.Text = "Reproduzir/Parar";
-            if (recordKeyValue != null) recordKeyValue.Text = recordHotkey == null ? "Não definido" : recordHotkey.Text;
-            if (playKeyValue != null) playKeyValue.Text = playHotkey == null ? "Não definido" : playHotkey.Text;
+            if (recordKeyLabel != null) recordKeyLabel.Text = Tr("Gravar/Parar");
+            if (playKeyLabel != null) playKeyLabel.Text = Tr("Reproduzir/Parar");
+            if (recordKeyValue != null) recordKeyValue.Text = recordHotkey == null ? Tr("Não definido") : recordHotkey.Text;
+            if (playKeyValue != null) playKeyValue.Text = playHotkey == null ? Tr("Não definido") : playHotkey.Text;
         }
 
         public bool TryCaptureHotkey(int vk, bool ctrl, bool alt, bool shift, bool win)
@@ -715,7 +777,7 @@ namespace MacroDeck
                 captureRecord = capturePlay = false;
                 PostToUi((MethodInvoker)delegate
                 {
-                    setRecordKeyButton.Text = "Definir"; setPlayKeyButton.Text = "Definir";
+                    setRecordKeyButton.Text = Tr("Definir"); setPlayKeyButton.Text = Tr("Definir");
                     SetKeyStatus("Alteração cancelada");
                 });
                 return true;
@@ -729,7 +791,7 @@ namespace MacroDeck
                 captureRecord = capturePlay = false;
                 PostToUi((MethodInvoker)delegate
                 {
-                    setRecordKeyButton.Text = "Definir"; setPlayKeyButton.Text = "Definir";
+                    setRecordKeyButton.Text = Tr("Definir"); setPlayKeyButton.Text = Tr("Definir");
                     SetKeyStatus("Escolha dois atalhos diferentes");
                 });
                 return true;
@@ -741,7 +803,7 @@ namespace MacroDeck
             {
                 if (setRecord) { settings.RecordHotkey = combination; recordHotkey = Hotkey.Parse(combination); }
                 else { settings.PlayHotkey = combination; playHotkey = Hotkey.Parse(combination); }
-                setRecordKeyButton.Text = "Definir"; setPlayKeyButton.Text = "Definir";
+                setRecordKeyButton.Text = Tr("Definir"); setPlayKeyButton.Text = Tr("Definir");
                 SaveSettings(); UpdateHotkeyLabels();
                 SetKeyStatus("Atalho atualizado");
             });
@@ -757,15 +819,15 @@ namespace MacroDeck
         private void BeginCapture(bool record)
         {
             captureRecord = record; capturePlay = !record;
-            setRecordKeyButton.Text = record ? "Pressione..." : "Definir";
-            setPlayKeyButton.Text = record ? "Definir" : "Pressione...";
+            setRecordKeyButton.Text = record ? Tr("Pressione...") : Tr("Definir");
+            setPlayKeyButton.Text = record ? Tr("Definir") : Tr("Pressione...");
             SetKeyStatus("Pressione uma tecla ou Esc para cancelar");
         }
 
         private void SetKeyStatus(string text)
         {
             if (keyStatusLabel == null || IsDisposed) return;
-            keyStatusLabel.Text = text;
+            keyStatusLabel.Text = Tr(text);
             keyStatusLabel.ForeColor = palette.Muted;
         }
 
@@ -820,7 +882,7 @@ namespace MacroDeck
                 UpdateRuntimeUi("Gravação vazia", "", false);
                 return;
             }
-            eventsLabel.Text = "Gravação não salva · pronta para testar ou salvar";
+            eventsLabel.Text = Tr("Gravação não salva · pronta para testar ou salvar");
             saveButton.Enabled = true;
             UpdateRuntimeUi("Gravação pronta para testar ou salvar", "", false);
         }
@@ -831,7 +893,7 @@ namespace MacroDeck
             try
             {
                 Directory.CreateDirectory(settings.Folder);
-                string baseName = SafeFileName(String.IsNullOrWhiteSpace(nameBox.Text) ? "Nova gravação" : nameBox.Text);
+                string baseName = SafeFileName(String.IsNullOrWhiteSpace(nameBox.Text) ? Tr("Nova gravação") : nameBox.Text);
                 string name = baseName;
                 string path = Path.Combine(settings.Folder, name + ".json");
                 int suffix = 2;
@@ -846,14 +908,14 @@ namespace MacroDeck
                 pendingEvents = null;
                 saveButton.Enabled = false;
                 LoadMacros(path);
-                eventsLabel.Text = "Gravação salva";
+                eventsLabel.Text = Tr("Gravação salva");
                 UpdateRuntimeUi("Macro salvo", "", false);
                 return true;
             }
             catch (Exception ex)
             {
                 UpdateRuntimeUi("Erro ao salvar", "", false);
-                MessageBox.Show(this, "Não foi possível salvar a gravação.\r\n\r\n" + ex.Message, "Erro ao salvar", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, Tr("Não foi possível salvar a gravação.") + "\r\n\r\n" + ex.Message, Tr("Erro ao salvar gravação"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
         }
@@ -902,7 +964,7 @@ namespace MacroDeck
             {
                 MacroFile preview = new MacroFile {
                     Version = 1,
-                    Name = String.IsNullOrWhiteSpace(nameBox.Text) ? "Prévia" : nameBox.Text.Trim(),
+                    Name = String.IsNullOrWhiteSpace(nameBox.Text) ? Tr("Prévia") : nameBox.Text.Trim(),
                     CreatedAt = DateTime.Now,
                     Events = new List<MacroEvent>(pendingEvents)
                 };
@@ -914,7 +976,7 @@ namespace MacroDeck
             MacroFile macro = ReadMacro(choice.Path);
             if (macro == null || macro.Events == null || macro.Events.Count == 0)
             {
-                MessageBox.Show(this, "Este arquivo não contém ações válidas para reproduzir.", "Macro inválido", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, Tr("Este arquivo não contém ações válidas para reproduzir."), Tr("Macro inválido"), MessageBoxButtons.OK, MessageBoxIcon.Information);
                 LoadMacros();
                 return;
             }
@@ -1035,11 +1097,11 @@ namespace MacroDeck
                 PostToUi((MethodInvoker)delegate { UpdateRuntimeUi(state, detail, active); });
                 return;
             }
-            statusLabel.Text = state;
+            statusLabel.Text = Tr(state);
             statusLabel.ForeColor = recording ? Color.FromArgb(246, 115, 122) : (playing ? palette.Accent : palette.Muted);
-            recordButton.Text = recording ? "Parar gravação" : "Gravar";
+            recordButton.Text = Tr(recording ? "Parar gravação" : "Gravar");
             recordButton.Icon = recording ? "stop" : "record";
-            playButton.Text = playing ? "Parar reprodução" : (pendingEvents != null && pendingEvents.Count > 0 ? "Testar gravação" : "Reproduzir");
+            playButton.Text = Tr(playing ? "Parar reprodução" : (pendingEvents != null && pendingEvents.Count > 0 ? "Testar gravação" : "Reproduzir"));
             playButton.Icon = playing ? "stop" : "play";
             recordButton.Enabled = !playing || recording;
             playButton.Enabled = !recording || playing;
@@ -1057,7 +1119,7 @@ namespace MacroDeck
             if (folderPickerInProgress || IsDisposed) return;
             folderPickerInProgress = true;
             folderButton.Enabled = false;
-            folderButton.Text = "Abrindo...";
+            folderButton.Text = Tr("Abrindo...");
             Cursor = Cursors.Default;
             IntPtr ownerHandle = Handle;
             string currentPath = settings.Folder;
@@ -1074,12 +1136,12 @@ namespace MacroDeck
                     if (folderButton != null && !folderButton.IsDisposed)
                     {
                         folderButton.Enabled = true;
-                        folderButton.Text = "Escolher pasta";
+                        folderButton.Text = Tr("Escolher pasta");
                     }
                     Cursor = Cursors.Default;
                     if (failure != null)
                     {
-                        MessageBox.Show(this, "Não foi possível abrir a seleção de pasta do Windows.\r\n\r\n" + failure.Message, "Pasta indisponível", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        MessageBox.Show(this, Tr("Não foi possível abrir a seleção de pasta do Windows.") + "\r\n\r\n" + failure.Message, Tr("Pasta indisponível"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return;
                     }
                     if (String.IsNullOrWhiteSpace(folder)) return;
@@ -1117,7 +1179,7 @@ namespace MacroDeck
                     {
                         MacroFile macro = ReadMacro(files[i], reader);
                         if (macro == null) continue;
-                        string name = CleanMacroName(String.IsNullOrWhiteSpace(macro.Name) ? Path.GetFileNameWithoutExtension(files[i]) : macro.Name);
+                        string name = CleanMacroName(String.IsNullOrWhiteSpace(macro.Name) ? Path.GetFileNameWithoutExtension(files[i]) : macro.Name, Localization.IsEnglish(uiLanguage));
                         int duplicateCount;
                         if (displayNameCounts.TryGetValue(name, out duplicateCount))
                         {
@@ -1149,7 +1211,7 @@ namespace MacroDeck
                     if (failure != null)
                     {
                         UpdateRuntimeUi("Pasta indisponível", "", false);
-                        MessageBox.Show(this, failure.Message, "Pasta indisponível", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        MessageBox.Show(this, failure.Message, Tr("Pasta indisponível"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return;
                     }
                     MacroChoice selected = macroCombo.SelectedItem as MacroChoice;
@@ -1195,7 +1257,7 @@ namespace MacroDeck
         {
             if (pendingEvents != null && !recording)
             {
-                eventsLabel.Text = "Gravação não salva · pronta para testar ou salvar";
+                eventsLabel.Text = Tr("Gravação não salva · pronta para testar ou salvar");
                 return;
             }
             MacroChoice choice = macroCombo.SelectedItem as MacroChoice;
@@ -1217,7 +1279,7 @@ namespace MacroDeck
             if (recording || playing) return;
             MacroChoice choice = macroCombo.SelectedItem as MacroChoice;
             if (choice == null) return;
-            DialogResult confirm = MessageBox.Show(this, "Apagar o macro \"" + choice.Name + "\" permanentemente?", "Apagar macro", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            DialogResult confirm = MessageBox.Show(this, Tr("Apagar o macro") + " \"" + choice.Name + "\" " + Tr("permanentemente?"), Tr("Apagar macro"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (confirm != DialogResult.Yes) return;
             try
             {
@@ -1225,7 +1287,7 @@ namespace MacroDeck
                 LoadMacros();
                 UpdateRuntimeUi("Macro apagado", "", false);
             }
-            catch (Exception ex) { MessageBox.Show(this, "Não foi possível apagar o macro.\r\n\r\n" + ex.Message, "Erro ao apagar", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+            catch (Exception ex) { MessageBox.Show(this, Tr("Não foi possível apagar o macro.") + "\r\n\r\n" + ex.Message, Tr("Erro ao apagar"), MessageBoxButtons.OK, MessageBoxIcon.Error); }
         }
 
         private void DeleteAllMacros()
@@ -1240,9 +1302,9 @@ namespace MacroDeck
                     for (int i = 0; i < files.Length; i++) if (ReadMacro(files[i]) != null) paths.Add(files[i]);
                 }
             }
-            catch (Exception ex) { MessageBox.Show(this, ex.Message, "Erro ao listar macros", MessageBoxButtons.OK, MessageBoxIcon.Error); return; }
+            catch (Exception ex) { MessageBox.Show(this, ex.Message, Tr("Erro ao listar macros"), MessageBoxButtons.OK, MessageBoxIcon.Error); return; }
             if (paths.Count == 0) { LoadMacros(); return; }
-            DialogResult confirm = MessageBox.Show(this, "Apagar permanentemente os " + paths.Count.ToString() + " macros válidos desta pasta?", "Apagar todos os macros", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            DialogResult confirm = MessageBox.Show(this, Tr("Apagar permanentemente os ") + paths.Count.ToString() + Tr(" macros válidos desta pasta?"), Tr("Apagar todos os macros"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (confirm != DialogResult.Yes) return;
             List<string> failures = new List<string>();
             for (int i = 0; i < paths.Count; i++)
@@ -1252,14 +1314,14 @@ namespace MacroDeck
             }
             LoadMacros();
             if (failures.Count == 0) UpdateRuntimeUi("Macros apagados", "", false);
-            else MessageBox.Show(this, "Alguns arquivos não puderam ser apagados:\r\n\r\n" + String.Join("\r\n", failures.ToArray()), "Exclusão incompleta", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            else MessageBox.Show(this, Tr("Alguns arquivos não puderam ser apagados:") + "\r\n\r\n" + String.Join("\r\n", failures.ToArray()), Tr("Exclusão incompleta"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
-        private static string CleanMacroName(string name)
+        private static string CleanMacroName(string name, bool english)
         {
-            if (String.IsNullOrWhiteSpace(name)) return "Nova gravação";
+            if (String.IsNullOrWhiteSpace(name)) return english ? "New recording" : "Nova gravação";
             string value = name.Trim();
-            if (Regex.IsMatch(value, @"^Macro \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}(?:\s*\(\d+\))*$")) return "Gravação";
+            if (Regex.IsMatch(value, @"^Macro \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}(?:\s*\(\d+\))*$")) return english ? "Recording" : "Gravação";
             string cleaned = Regex.Replace(value, @"(?:\s*\(\d+\)){2,}$", "");
             return String.IsNullOrWhiteSpace(cleaned) ? value : cleaned;
         }

@@ -1,19 +1,25 @@
-# Como contribuir
+# Contributing to MacroDeck
 
-O MacroDeck está sendo preparado para a primeira publicação pública. Contribuições devem ser pequenas, focadas e acompanhadas de uma descrição clara do comportamento alterado.
+[English](CONTRIBUTING.md) · [Português (Brasil)](CONTRIBUTING.pt-BR.md)
 
-## Ambiente
+MacroDeck accepts focused changes that clearly describe the behavior they add or fix.
+
+## Development environment
 
 - Windows
 - .NET Framework 4.8 Developer Pack
-- Visual Studio ou compilador C# do .NET Framework
+- Visual Studio or the .NET Framework C# compiler
 
-Compile com `Source/build.ps1` ou abra `Source/MacroDeck.csproj` no Visual Studio. Antes de enviar uma alteração, revise o diff e confirme que ela compila no Windows.
+Build with `Source/build.ps1` or open `Source/MacroDeck.csproj` in Visual Studio. Before submitting a change, review the diff and confirm that it builds on Windows.
 
-## Versões e publicação
+## Versioning and releases
 
-O repositório recebe somente alterações selecionadas e revisadas para uma release. O desenvolvimento local pode avançar sem criar uma nova versão pública a cada ajuste. As releases usam SemVer (`MAJOR.MINOR.PATCH`): mudanças compatíveis de recursos incrementam MINOR; correções compatíveis incrementam PATCH; mudanças incompatíveis incrementam MAJOR. Cada release deve atualizar `CHANGELOG.md`, a versão do assembly e a tag Git. O artefato binário publicado é para Windows.
+The public repository receives only changes selected and reviewed for a release. Local development can continue without publishing a new public version for each adjustment. Releases use SemVer (`MAJOR.MINOR.PATCH`): compatible feature updates increment MINOR; compatible fixes increment PATCH; breaking changes increment MAJOR. Each release should update `CHANGELOG.md`, the assembly version, and the Git tag. The published binary targets Windows.
 
-## Escopo atual
+## Current scope
 
-O programa depende de Windows Forms e APIs de entrada do Windows. Não envie alterações que apresentem suporte a outros sistemas como disponível sem uma implementação e validação próprias.
+The program depends on Windows Forms and Windows input APIs. Do not describe support for other operating systems as available without implementing and validating it.
+
+---
+
+[Project README](README.md) · [Português (Brasil)](CONTRIBUTING.pt-BR.md)

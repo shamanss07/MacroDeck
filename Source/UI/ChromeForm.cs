@@ -44,6 +44,13 @@ namespace MacroDeck
         protected Panel ContentPanel { get; private set; }
         protected Label ChromeTitle { get; private set; }
 
+        protected void ApplyChromeLanguage(string language)
+        {
+            if (closeButton != null) closeButton.AccessibleName = Localization.Translate(language, "Fechar janela");
+            if (maximizeButton != null) maximizeButton.AccessibleName = Localization.Translate(language, "Maximizar ou restaurar janela");
+            if (minimizeButton != null) minimizeButton.AccessibleName = Localization.Translate(language, "Minimizar janela");
+        }
+
         protected ChromeForm(bool resizable)
         {
             canResize = resizable;

@@ -15,6 +15,7 @@ namespace MacroDeck
         private ThemePalette palette;
         private MacroDropdownPopup popup;
         private int updateDepth;
+        public string Language { get; set; }
 
         public List<MacroChoice> Items { get; private set; }
         public event EventHandler SelectedIndexChanged;
@@ -41,6 +42,7 @@ namespace MacroDeck
         public MacroSelector()
         {
             Items = new List<MacroChoice>();
+            Language = "pt-BR";
             Size = new Size(270, 36);
             TabStop = true;
             Cursor = Cursors.Hand;
@@ -87,7 +89,7 @@ namespace MacroDeck
             Form owner = FindForm();
             if (owner == null || owner.IsDisposed) return;
             expanded = true;
-            popup = new MacroDropdownPopup(Items, selectedIndex, palette);
+            popup = new MacroDropdownPopup(Items, selectedIndex, palette, Language);
             popup.ChoiceChosen += delegate(int index) { SelectedIndex = index; };
             popup.FormClosed += delegate { expanded = false; popup = null; Invalidate(); };
             Rectangle anchor = RectangleToScreen(ClientRectangle);
@@ -109,7 +111,8 @@ namespace MacroDeck
                 e.Graphics.DrawPath(pen, path);
             }
             MacroChoice choice = SelectedItem as MacroChoice;
-            string text = choice == null ? (Items.Count == 0 ? "Nenhum macro salvo" : "Selecione um macro") : choice.Name;
+            string emptyText = Items.Count == 0 ? "Nenhum macro salvo" : "Selecione um macro";
+            string text = choice == null ? Localization.Translate(Language, emptyText) : choice.Name;
             Color textColor = choice == null ? colors.Muted : colors.Text;
             TextRenderer.DrawText(e.Graphics, text, Font, new Rectangle(12, 1, Math.Max(0, Width - 48), Height - 2), textColor, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
             Point center = new Point(Width - 19, Height / 2);
@@ -144,7 +147,7 @@ namespace MacroDeck
         private int startTop;
         public event Action<int> ChoiceChosen;
 
-        public MacroDropdownPopup(IList<MacroChoice> choices, int currentSelection, ThemePalette palette)
+        public MacroDropdownPopup(IList<MacroChoice> choices, int currentSelection, ThemePalette palette, string language)
         {
             selectedIndex = currentSelection;
             edgeColor = palette.Border;
@@ -162,7 +165,7 @@ namespace MacroDeck
             DoubleBuffered = true;
 
             viewer = new ModernScrollViewer { Dock = DockStyle.Fill, BackColor = palette.Input, Margin = Padding.Empty };
-            list = new MacroDropdownList(choices, selectedIndex, palette) { Dock = DockStyle.Top, Height = Math.Max(45, choices.Count * rowHeight + 6) };
+            list = new MacroDropdownList(choices, selectedIndex, palette, language) { Dock = DockStyle.Top, Height = Math.Max(45, choices.Count * rowHeight + 6) };
             list.ChoiceClicked += delegate(int index)
             {
                 Action<int> selected = ChoiceChosen;
@@ -250,11 +253,12 @@ namespace MacroDeck
         private readonly int selectedIndex;
         private int hoveredIndex = -1;
         private ThemePalette palette;
+        private readonly string language;
         public event Action<int> ChoiceClicked;
 
-        public MacroDropdownList(IList<MacroChoice> items, int currentSelection, ThemePalette colors)
+        public MacroDropdownList(IList<MacroChoice> items, int currentSelection, ThemePalette colors, string currentLanguage)
         {
-            choices = items; selectedIndex = currentSelection; palette = colors;
+            choices = items; selectedIndex = currentSelection; palette = colors; language = currentLanguage;
             BackColor = colors.Input;
             Cursor = items.Count == 0 ? Cursors.Default : Cursors.Hand;
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
@@ -277,7 +281,7 @@ namespace MacroDeck
             e.Graphics.Clear(palette.Input);
             if (choices.Count == 0)
             {
-                TextRenderer.DrawText(e.Graphics, "Nenhum macro salvo", Font, new Rectangle(12, 0, Math.Max(0, Width - 24), 45), palette.Muted, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+                TextRenderer.DrawText(e.Graphics, Localization.Translate(language, "Nenhum macro salvo"), Font, new Rectangle(12, 0, Math.Max(0, Width - 24), 45), palette.Muted, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
                 return;
             }
             int first = Math.Max(0, e.ClipRectangle.Top / 36);

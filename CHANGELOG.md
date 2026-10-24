@@ -1,13 +1,27 @@
-# Histórico de mudanças
+# Changelog
 
-As entradas abaixo registram somente versões públicas. Alterações de desenvolvimento ainda não lançadas não recebem uma versão pública.
+[English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
-## 1.0.0 — primeira versão pública
+Only public releases are listed here. Unreleased development changes do not receive a public version entry.
 
-- Gravação, teste, salvamento e reprodução de macros de teclado e mouse.
-- Atalhos globais configuráveis e controles de repetição com intervalo.
-- Biblioteca de macros com seleção de pasta, atualização e exclusão protegida por confirmação.
-- Temas claro e escuro, cores personalizáveis, fontes instaladas e preferências persistentes.
-- Interface Windows Forms com ícone MacroDeck.
-- Escala da interface independente da resolução, com ajuste ao espaço disponível e a mudanças de monitor/DPI.
-- Suporte inicial exclusivo para Windows e .NET Framework 4.8.
+## 1.1.0 — English language support
+
+- Add English and Brazilian Portuguese interface translations, with language changes applied immediately.
+- Detect the Windows UI language as the default on first launch; a saved app preference takes precedence.
+- Provide English as the main project documentation and keep Portuguese documentation available.
+- Fix the Options dialog clipping and make the Windows CI workflow locate MSBuild reliably.
+- Build and attach a versioned Windows executable to tagged GitHub releases.
+
+## 1.0.0 — first public release
+
+- Record, preview, save, and play back keyboard and mouse macros.
+- Configurable global shortcuts and repeat interval controls.
+- Macro library with folder selection, refresh, and confirmation-protected deletion.
+- Light and dark themes, custom colors, installed fonts, and persistent preferences.
+- Windows Forms interface with the MacroDeck app icon.
+- Resolution-independent interface scaling, adjusted for available space and monitor/DPI changes.
+- Initial support for Windows and .NET Framework 4.8.
+
+---
+
+[Project README](README.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)

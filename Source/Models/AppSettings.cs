@@ -14,6 +14,7 @@ namespace MacroDeck
         public string TextColor { get; set; }
         public string AccentColor { get; set; }
         public string FontFamily { get; set; }
+        public string Language { get; set; }
         public string DarkBackgroundColor { get; set; }
         public string DarkCardColor { get; set; }
         public string DarkTextColor { get; set; }
@@ -37,7 +38,7 @@ namespace MacroDeck
                 Folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MacroDeck", "Macros"),
                 RecordHotkey = "F9", PlayHotkey = "F10", DarkTheme = true,
                 BackgroundColor = "", CardColor = "", TextColor = "", AccentColor = "",
-                FontFamily = "",
+                FontFamily = "", Language = Localization.DetectDefaultLanguage(),
                 DarkBackgroundColor = "", DarkCardColor = "", DarkTextColor = "", DarkAccentColor = "",
                 LightBackgroundColor = "", LightCardColor = "", LightTextColor = "", LightAccentColor = "",
                 CycleInfinite = false, Repeat = false, IntervalMinutes = 0, IntervalSeconds = 5,

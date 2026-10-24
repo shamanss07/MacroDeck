@@ -13,34 +13,39 @@ namespace MacroDeck
         private readonly Color[] selected = new Color[4];
         private bool resetColors;
         private readonly MacroSelector fontSelector;
+        private readonly MacroSelector languageSelector;
+        private readonly string uiLanguage;
 
         public string BackgroundHex { get; private set; }
         public string CardHex { get; private set; }
         public string TextHex { get; private set; }
         public string AccentHex { get; private set; }
         public string SelectedFontFamily { get; private set; }
+        public string SelectedLanguage { get; private set; }
 
-        public OptionsForm(AppSettings currentSettings, ThemePalette currentPalette) : base(false)
+        public OptionsForm(AppSettings currentSettings, ThemePalette currentPalette, string language) : base(false)
         {
             settings = currentSettings;
             palette = currentPalette;
+            uiLanguage = language;
+            ApplyChromeLanguage(uiLanguage);
             selected[0] = palette.Background; selected[1] = palette.Card;
             selected[2] = palette.Text; selected[3] = palette.Accent;
 
-            Text = "Opções · MacroDeck";
+            Text = T("Opções") + " · MacroDeck";
             StartPosition = FormStartPosition.CenterParent;
             ShowInTaskbar = false; MaximizeBox = false; MinimizeBox = false;
-            ClientSize = new Size(560, 510); BackColor = palette.Background; ForeColor = palette.Text;
+            ClientSize = new Size(560, 560); BackColor = palette.Background; ForeColor = palette.Text;
             Font = FontManager.Create(9f, FontStyle.Regular);
             ApplyChromeTheme(palette.Background, palette.Text, palette.Card);
 
-            Label title = new Label { Text = "Opções", AutoSize = true, Location = new Point(26, 22), Font = FontManager.Create(20f, FontStyle.Bold), ForeColor = palette.Text };
-            Label subtitle = new Label { Text = "Personalize as cores do tema atual.", AutoSize = true, Location = new Point(28, 58), ForeColor = palette.Muted };
+            Label title = new Label { Text = T("Opções"), AutoSize = true, Location = new Point(26, 22), Font = FontManager.Create(20f, FontStyle.Bold), ForeColor = palette.Text };
+            Label subtitle = new Label { Text = T("Personalize as cores do tema atual."), AutoSize = true, Location = new Point(28, 58), ForeColor = palette.Muted };
             ContentPanel.Controls.Add(title); ContentPanel.Controls.Add(subtitle);
 
-            colorsCard = new RoundedPanel { Location = new Point(22, 96), Size = new Size(516, 276), BackColor = palette.Card, BorderColor = palette.Border, CornerRadius = 16 };
+            colorsCard = new RoundedPanel { Location = new Point(22, 96), Size = new Size(516, 316), BackColor = palette.Card, BorderColor = palette.Border, CornerRadius = 16 };
             ContentPanel.Controls.Add(colorsCard);
-            string[] labels = { "Fundo do aplicativo", "Caixas e cartões", "Textos", "Cor de destaque" };
+            string[] labels = { T("Fundo do aplicativo"), T("Caixas e cartões"), T("Textos"), T("Cor de destaque") };
             for (int i = 0; i < labels.Length; i++)
             {
                 int y = 18 + i * 50;
@@ -50,7 +55,7 @@ namespace MacroDeck
                 colorsCard.Controls.Add(label); colorsCard.Controls.Add(swatches[i]);
             }
 
-            Label fontLabel = new Label { Text = "Fonte do aplicativo", AutoSize = true, Location = new Point(20, 229), ForeColor = palette.Text };
+            Label fontLabel = new Label { Text = T("Fonte do aplicativo"), AutoSize = true, Location = new Point(20, 229), ForeColor = palette.Text };
             fontSelector = new MacroSelector { Location = new Point(242, 218), Size = new Size(250, 36), Font = FontManager.Create(9f, FontStyle.Regular) };
             fontSelector.ApplyTheme(palette);
             fontSelector.BeginUpdate();
@@ -67,7 +72,19 @@ namespace MacroDeck
             CaptureSelectedFont();
             colorsCard.Controls.Add(fontLabel); colorsCard.Controls.Add(fontSelector);
 
-            RoundedButton reset = new RoundedButton { Text = "Restaurar cores padrão", Location = new Point(24, 396), Size = new Size(190, 38), CornerRadius = 10, Tag = "secondary", Font = FontManager.Create(8.5f, FontStyle.Bold) };
+            Label languageLabel = new Label { Text = T("Idioma do aplicativo"), AutoSize = true, Location = new Point(20, 273), ForeColor = palette.Text };
+            languageSelector = new MacroSelector { Location = new Point(242, 260), Size = new Size(250, 36), Font = FontManager.Create(9f, FontStyle.Regular) };
+            languageSelector.ApplyTheme(palette);
+            languageSelector.BeginUpdate();
+            languageSelector.Items.Add(new MacroChoice { Name = "Português (Brasil)", Path = "pt-BR" });
+            languageSelector.Items.Add(new MacroChoice { Name = "English", Path = "en-US" });
+            languageSelector.SelectedIndex = String.Equals(currentSettings.Language, "en-US", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+            languageSelector.EndUpdate();
+            colorsCard.Controls.Add(languageLabel); colorsCard.Controls.Add(languageSelector);
+
+            Label languageHint = new Label { Text = T("A mudança de idioma será aplicada imediatamente."), AutoSize = true, Location = new Point(22, 417), ForeColor = palette.Muted, Tag = "muted" };
+            ContentPanel.Controls.Add(languageHint);
+            RoundedButton reset = new RoundedButton { Text = T("Restaurar cores padrão"), Location = new Point(24, 444), Size = new Size(190, 38), CornerRadius = 10, Tag = "secondary", Font = FontManager.Create(8.5f, FontStyle.Bold) };
             reset.Click += delegate
             {
                 resetColors = true;
@@ -76,11 +93,13 @@ namespace MacroDeck
                 selected[2] = defaults.Text; selected[3] = defaults.Accent;
                 UpdateSwatches();
             };
-            RoundedButton cancel = new RoundedButton { Text = "Cancelar", Location = new Point(316, 396), Size = new Size(96, 38), CornerRadius = 10, Tag = "secondary", Font = FontManager.Create(8.5f, FontStyle.Bold), DialogResult = DialogResult.Cancel };
-            RoundedButton save = new RoundedButton { Text = "Salvar", Location = new Point(424, 396), Size = new Size(112, 38), CornerRadius = 10, Tag = "primary", Font = FontManager.Create(8.5f, FontStyle.Bold), DialogResult = DialogResult.OK };
+            RoundedButton cancel = new RoundedButton { Text = T("Cancelar"), Location = new Point(316, 444), Size = new Size(96, 38), CornerRadius = 10, Tag = "secondary", Font = FontManager.Create(8.5f, FontStyle.Bold), DialogResult = DialogResult.Cancel };
+            RoundedButton save = new RoundedButton { Text = T("Salvar"), Location = new Point(424, 444), Size = new Size(112, 38), CornerRadius = 10, Tag = "primary", Font = FontManager.Create(8.5f, FontStyle.Bold), DialogResult = DialogResult.OK };
             save.Click += delegate
             {
                 CaptureSelectedFont();
+                MacroChoice languageChoice = languageSelector.SelectedItem as MacroChoice;
+                SelectedLanguage = languageChoice == null ? "pt-BR" : languageChoice.Path;
                 BackgroundHex = resetColors ? "" : ThemePalette.Hex(selected[0]);
                 CardHex = resetColors ? "" : ThemePalette.Hex(selected[1]);
                 TextHex = resetColors ? "" : ThemePalette.Hex(selected[2]);
@@ -90,6 +109,8 @@ namespace MacroDeck
             AcceptButton = save; CancelButton = cancel;
             ApplyTheme();
         }
+
+        private string T(string text) { return Localization.Translate(uiLanguage, text); }
 
         public void RefreshPalette(ThemePalette currentPalette)
         {
@@ -107,6 +128,7 @@ namespace MacroDeck
             }
             fontSelector.EndUpdate();
             CaptureSelectedFont();
+            if (languageSelector != null) languageSelector.SelectedIndex = String.Equals(settings.Language, "en-US", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
             ApplyTheme();
         }
 
@@ -114,7 +136,7 @@ namespace MacroDeck
         {
             int index = Array.IndexOf(swatches, sender);
             if (index < 0) return;
-            Color? result = ColorPickerForm.PickColor(this, selected[index], palette);
+            Color? result = ColorPickerForm.PickColor(this, selected[index], palette, uiLanguage);
             if (!result.HasValue) return;
             selected[index] = result.Value; resetColors = false; UpdateSwatches();
         }
@@ -140,6 +162,7 @@ namespace MacroDeck
             BackColor = palette.Background; ForeColor = palette.Text;
             colorsCard.BackColor = palette.Card; colorsCard.BorderColor = palette.Border;
             if (fontSelector != null) fontSelector.ApplyTheme(palette);
+            if (languageSelector != null) languageSelector.ApplyTheme(palette);
             UpdateSwatches();
             for (int i = 0; i < colorsCard.Controls.Count; i++)
             {
@@ -164,11 +187,14 @@ namespace MacroDeck
     internal sealed class AboutForm : ChromeForm
     {
         private ThemePalette palette;
+        private readonly string language;
 
-        public AboutForm(ThemePalette currentPalette) : base(false)
+        public AboutForm(ThemePalette currentPalette, string currentLanguage) : base(false)
         {
             palette = currentPalette;
-            Text = "Sobre MacroDeck";
+            language = currentLanguage;
+            ApplyChromeLanguage(language);
+            Text = T("Sobre MacroDeck");
             StartPosition = FormStartPosition.CenterParent;
             ShowInTaskbar = false; MaximizeBox = false; MinimizeBox = false;
             ClientSize = new Size(500, 394); BackColor = palette.Background; ForeColor = palette.Text;
@@ -178,17 +204,19 @@ namespace MacroDeck
             RoundedPanel card = new RoundedPanel { Location = new Point(20, 20), Size = new Size(460, 312), BackColor = palette.Card, BorderColor = palette.Border, CornerRadius = 16 };
             ContentPanel.Controls.Add(card);
             Label title = new Label { Text = "MacroDeck", AutoSize = true, Location = new Point(28, 26), Font = FontManager.Create(22f, FontStyle.Bold), ForeColor = palette.Text };
-            Label version = new Label { Text = "Versão 1.0.0", AutoSize = true, Location = new Point(30, 70), ForeColor = palette.Muted };
-            Label author = new Label { Text = "Criado por shaman", AutoSize = true, Location = new Point(30, 112), Font = FontManager.Create(10f, FontStyle.Bold), ForeColor = palette.Text };
-            Label description = new Label { Text = "Gravador e reprodutor de macros para Windows.\r\nSeus macros e preferências ficam no computador.", AutoSize = false, Location = new Point(30, 146), Size = new Size(400, 52), ForeColor = palette.Muted };
-            Label fontCredit = new Label { Text = "Fonte Montserrat · SIL Open Font License 1.1", AutoSize = true, Location = new Point(30, 218), ForeColor = palette.Muted };
-            RoundedButton license = new RoundedButton { Text = "Ver licença da fonte", Location = new Point(30, 250), Size = new Size(166, 36), CornerRadius = 9, Tag = "secondary", Font = FontManager.Create(8.5f, FontStyle.Bold) };
-            license.Click += delegate { using (LicenseForm licenseDialog = new LicenseForm(palette)) licenseDialog.ShowDialog(this); };
-            RoundedButton close = new RoundedButton { Text = "Fechar", Location = new Point(342, 250), Size = new Size(88, 36), CornerRadius = 9, Tag = "primary", Font = FontManager.Create(8.5f, FontStyle.Bold), DialogResult = DialogResult.OK };
+            Label version = new Label { Text = T("Versão 1.1.0"), AutoSize = true, Location = new Point(30, 70), ForeColor = palette.Muted, Tag = "muted" };
+            Label author = new Label { Text = T("Criado por shamanss07"), AutoSize = true, Location = new Point(30, 112), Font = FontManager.Create(10f, FontStyle.Bold), ForeColor = palette.Text };
+            Label description = new Label { Text = T("Gravador e reprodutor de macros para Windows.\r\nSeus macros e preferências ficam no computador."), AutoSize = false, Location = new Point(30, 146), Size = new Size(400, 52), ForeColor = palette.Muted, Tag = "muted" };
+            Label fontCredit = new Label { Text = T("Fonte Montserrat · SIL Open Font License 1.1"), AutoSize = true, Location = new Point(30, 218), ForeColor = palette.Muted, Tag = "muted" };
+            RoundedButton license = new RoundedButton { Text = T("Ver licença da fonte"), Location = new Point(30, 250), Size = new Size(166, 36), CornerRadius = 9, Tag = "secondary", Font = FontManager.Create(8.5f, FontStyle.Bold) };
+            license.Click += delegate { using (LicenseForm licenseDialog = new LicenseForm(palette, language)) licenseDialog.ShowDialog(this); };
+            RoundedButton close = new RoundedButton { Text = T("Fechar"), Location = new Point(342, 250), Size = new Size(88, 36), CornerRadius = 9, Tag = "primary", Font = FontManager.Create(8.5f, FontStyle.Bold), DialogResult = DialogResult.OK };
             card.Controls.Add(title); card.Controls.Add(version); card.Controls.Add(author); card.Controls.Add(description); card.Controls.Add(fontCredit); card.Controls.Add(license); card.Controls.Add(close);
             ApplyButtonColors(card);
             AcceptButton = close;
         }
+
+        private string T(string text) { return Localization.Translate(language, text); }
 
         public void RefreshPalette(ThemePalette currentPalette)
         {
@@ -207,8 +235,7 @@ namespace MacroDeck
                 Label label = control as Label;
                 if (label != null)
                 {
-                    bool muted = label.Text.StartsWith("Versão", StringComparison.Ordinal) || label.Text.StartsWith("Fonte", StringComparison.Ordinal) || label.Text.StartsWith("Gravador", StringComparison.Ordinal);
-                    label.ForeColor = muted ? palette.Muted : palette.Text;
+                    label.ForeColor = label.Tag != null && (string)label.Tag == "muted" ? palette.Muted : palette.Text;
                 }
                 RoundedButton button = control as RoundedButton;
                 if (button != null)
@@ -233,9 +260,10 @@ namespace MacroDeck
 
     internal sealed class LicenseForm : ChromeForm
     {
-        public LicenseForm(ThemePalette palette) : base(false)
+        public LicenseForm(ThemePalette palette, string language) : base(false)
         {
-            Text = "Licença Montserrat"; StartPosition = FormStartPosition.CenterParent;
+            ApplyChromeLanguage(language);
+            Text = Localization.Translate(language, "Licença Montserrat"); StartPosition = FormStartPosition.CenterParent;
             MaximizeBox = false; MinimizeBox = false;
             ClientSize = new Size(700, 578); BackColor = palette.Background; ForeColor = palette.Text;
             Font = FontManager.Create(9f, FontStyle.Regular);
