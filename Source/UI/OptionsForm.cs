@@ -207,7 +207,7 @@ namespace MacroDeck
             RoundedPanel card = new RoundedPanel { Location = new Point(20, 20), Size = new Size(460, 312), BackColor = palette.Card, BorderColor = palette.Border, CornerRadius = 16 };
             ContentPanel.Controls.Add(card);
             Label title = new Label { Text = "MacroDeck", AutoSize = true, Location = new Point(28, 26), Font = FontManager.Create(22f, FontStyle.Bold), ForeColor = palette.Text };
-            Label version = new Label { Text = T("Versão 1.1.3"), AutoSize = true, Location = new Point(30, 70), ForeColor = palette.Muted, Tag = "muted" };
+            Label version = new Label { Text = T("Versão 1.1.4"), AutoSize = true, Location = new Point(30, 70), ForeColor = palette.Muted, Tag = "muted" };
             Label author = new Label { Text = T("Criado por shamanss07"), AutoSize = true, Location = new Point(30, 112), Font = FontManager.Create(10f, FontStyle.Bold), ForeColor = palette.Text };
             Label description = new Label { Text = T("Gravador e reprodutor de macros para Windows.\r\nSeus macros e preferências ficam no computador."), AutoSize = false, Location = new Point(30, 146), Size = new Size(400, 52), ForeColor = palette.Muted, Tag = "muted" };
             Label fontCredit = new Label { Text = T("Fonte Montserrat · SIL Open Font License 1.1"), AutoSize = true, Location = new Point(30, 218), ForeColor = palette.Muted, Tag = "muted" };

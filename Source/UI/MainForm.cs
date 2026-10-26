@@ -27,8 +27,13 @@ namespace MacroDeck
 
         private AppSettings settings;
         private string uiLanguage = "pt-BR";
+        private bool legacyMacroDefaultCycleInfinite;
+        private int legacyMacroDefaultIntervalMinutes;
+        private int legacyMacroDefaultIntervalSeconds;
         private NativeHooks hooks;
         private List<MacroEvent> pendingEvents;
+        private MacroFile activeMacro;
+        private string activeMacroPath = "";
         private readonly Stopwatch recordClock = new Stopwatch();
         private volatile bool recording;
         private volatile bool playing;
@@ -38,6 +43,10 @@ namespace MacroDeck
         private bool captureRecord;
         private bool capturePlay;
         private bool refreshingMacros;
+        private bool applyingMacroSettings;
+        private bool pendingPreviewActive;
+        private bool activatingMacro;
+        private bool macroSettingsDirty;
         private bool folderPickerInProgress;
         private bool activeClickerPage;
         private bool pageTransitionTarget;
@@ -54,7 +63,7 @@ namespace MacroDeck
         private Label recordKeyLabel, playKeyLabel, recordKeyValue, playKeyValue, keyStatusLabel, folderLabel;
         private Label autoClickerTitle, autoClickerHint;
         private RoundedButton recordButton, playButton, themeButton, folderButton;
-        private RoundedButton setRecordKeyButton, setPlayKeyButton, refreshButton, deleteSelectedButton, deleteAllButton, saveButton;
+        private RoundedButton setRecordKeyButton, setPlayKeyButton, refreshButton, deleteSelectedButton, deleteAllButton, saveButton, useMacroButton;
         private RoundedButton macroNavButton, clickerNavButton, menuButton;
         private ModernTextBox nameBox, folderBox;
         private MacroSelector macroCombo;
@@ -94,6 +103,9 @@ namespace MacroDeck
         public MainForm() : base(true)
         {
             settings = LoadSettings();
+            legacyMacroDefaultCycleInfinite = settings.CycleInfinite;
+            legacyMacroDefaultIntervalMinutes = settings.IntervalMinutes;
+            legacyMacroDefaultIntervalSeconds = settings.IntervalSeconds;
             uiLanguage = settings.Language;
             ApplyChromeLanguage(uiLanguage);
             FontManager.SetPreferredFamily(settings.FontFamily);
@@ -293,7 +305,6 @@ namespace MacroDeck
             macroCombo.SelectedIndexChanged += delegate
             {
                 if (refreshingMacros) return;
-                SaveSelectedMacro();
                 UpdateSelectedMacro();
                 UpdateMacroActions();
             };
@@ -319,6 +330,7 @@ namespace MacroDeck
                 refreshButton.Left = macroCombo.Right + 7;
                 deleteSelectedButton.Left = refreshButton.Right + 6;
                 deleteAllButton.Left = deleteSelectedButton.Right + 6;
+                LayoutMacroActionButtons(macroCard);
             };
             eventsLabel = new Label { Text = Tr("Nenhum macro salvo"), AutoSize = false, Location = new Point(20, 166), Size = new Size(410, 22), Font = FontManager.Create(8.2f, FontStyle.Regular), Tag = "muted" };
             macroCard.Controls.Add(eventsLabel);
@@ -326,6 +338,14 @@ namespace MacroDeck
             saveButton.Enabled = false;
             saveButton.Click += delegate { SaveRecording(); };
             macroCard.Controls.Add(saveButton);
+            useMacroButton = MakeButton(Tr("Usar Macro Selecionado"), 175, 197, 190, 36, false);
+            useMacroButton.Enabled = false;
+            useMacroButton.AccessibleName = Tr("Usar Macro Selecionado");
+            useMacroButton.Click += delegate { UseSelectedMacro(); };
+            saveButton.FontChanged += delegate { LayoutMacroActionButtons(macroCard); };
+            useMacroButton.FontChanged += delegate { LayoutMacroActionButtons(macroCard); };
+            macroCard.Controls.Add(useMacroButton);
+            LayoutMacroActionButtons(macroCard);
             grid.Controls.Add(macroCard, 0, 1);
 
             RoundedPanel folderCard = CreateCard();
@@ -376,7 +396,17 @@ namespace MacroDeck
             infiniteCheck = new AnimatedToggle { Text = Tr("Ciclo Infinito"), Location = new Point(20, 49), Width = 150, Height = 30, Font = FontManager.Create(8.5f, FontStyle.Bold), BackColor = palette.Card };
             infiniteCheck.SetInitialChecked(settings.CycleInfinite);
             infiniteCheck.ApplyTheme(palette.Accent, palette.Text);
-            infiniteCheck.CheckedChanged += delegate { settings.CycleInfinite = infiniteCheck.Checked; settings.Repeat = infiniteCheck.Checked; SaveSettings(); };
+            infiniteCheck.CheckedChanged += delegate
+            {
+                settings.CycleInfinite = infiniteCheck.Checked;
+                settings.Repeat = infiniteCheck.Checked;
+                if (!applyingMacroSettings)
+                {
+                    macroSettingsDirty = true;
+                    SaveSettings();
+                    UpdateMacroActions();
+                }
+            };
             intervalCard.Controls.Add(infiniteCheck);
             intervalCard.Resize += delegate
             {
@@ -387,8 +417,8 @@ namespace MacroDeck
             secondsInput = new StepperInput { Location = new Point(138, 111), Width = 104, Minimum = 0, Maximum = 59, Suffix = "s", Value = Math.Max(0, Math.Min(settings.IntervalSeconds, 59)) };
             minutesInput.ApplyLanguage(uiLanguage); secondsInput.ApplyLanguage(uiLanguage);
             intervalCard.Controls.Add(minutesInput); intervalCard.Controls.Add(secondsInput);
-            minutesInput.ValueChanged += delegate { SaveIntervalSettings(); };
-            secondsInput.ValueChanged += delegate { SaveIntervalSettings(); };
+            minutesInput.ValueChanged += delegate { if (!applyingMacroSettings) SaveIntervalSettings(); };
+            secondsInput.ValueChanged += delegate { if (!applyingMacroSettings) SaveIntervalSettings(); };
             grid.Controls.Add(intervalCard, 1, 2);
             grid.ResumeLayout(true);
         }
@@ -658,7 +688,9 @@ namespace MacroDeck
             settings.IntervalSeconds = (int)secondsInput.Value;
             settings.Interval = settings.IntervalMinutes * 60 + settings.IntervalSeconds;
             settings.IntervalUnit = "segundos";
+            macroSettingsDirty = true;
             SaveSettings();
+            UpdateMacroActions();
         }
 
         private string Tr(string portugueseText)
@@ -669,6 +701,27 @@ namespace MacroDeck
         private RoundedPanel CreateCard()
         {
             return new RoundedPanel { BackColor = palette.Card, BorderColor = palette.Border, Margin = new Padding(0, 8, 12, 8), CornerRadius = 15, Tag = "card" };
+        }
+
+        private void LayoutMacroActionButtons(RoundedPanel card)
+        {
+            if (card == null || saveButton == null || useMacroButton == null) return;
+            const int gap = 8;
+            const int rightPadding = 20;
+            int available = Math.Max(1, card.ClientSize.Width - saveButton.Left - rightPadding);
+            int preferredSaveWidth = TextRenderer.MeasureText(saveButton.Text, saveButton.Font,
+                new Size(1000, saveButton.Height), TextFormatFlags.NoPadding | TextFormatFlags.SingleLine).Width + 16;
+            int preferredUseWidth = TextRenderer.MeasureText(useMacroButton.Text, useMacroButton.Font,
+                new Size(1000, useMacroButton.Height), TextFormatFlags.NoPadding | TextFormatFlags.SingleLine).Width + 16;
+            int saveWidth = Math.Max(148, preferredSaveWidth);
+            int useWidth = Math.Min(preferredUseWidth, available - saveWidth - gap);
+            if (useWidth < preferredUseWidth)
+            {
+                saveWidth = Math.Max(110, saveWidth - (preferredUseWidth - Math.Max(0, useWidth)));
+                useWidth = Math.Min(preferredUseWidth, available - saveWidth - gap);
+            }
+            saveButton.Width = Math.Max(1, saveWidth);
+            useMacroButton.SetBounds(saveButton.Right + gap, saveButton.Top, Math.Max(1, useWidth), saveButton.Height);
         }
 
         private void AddSectionTitle(Control parent, string text, int x, int y)
@@ -1004,6 +1057,7 @@ namespace MacroDeck
             if (recording) { StopRecording(); return; }
             if (playing) { UpdateRuntimeUi("Pare a reprodução antes de gravar", "", true); return; }
             pendingEvents = null;
+            pendingPreviewActive = false;
             saveButton.Enabled = false;
             lock (eventsLock) recordedEvents.Clear();
             recordLimitQueued = false;
@@ -1038,6 +1092,7 @@ namespace MacroDeck
                 BalanceInputs(copy, recordClock.ElapsedMilliseconds);
             }
             pendingEvents = copy.Count == 0 ? null : copy;
+            pendingPreviewActive = pendingEvents != null;
             if (pendingEvents == null)
             {
                 eventsLabel.Text = "";
@@ -1052,23 +1107,37 @@ namespace MacroDeck
 
         private bool SaveRecording()
         {
-            if (pendingEvents == null || pendingEvents.Count == 0) return false;
+            if (pendingEvents == null || pendingEvents.Count == 0) return SaveActiveMacroSettings();
             try
             {
                 Directory.CreateDirectory(settings.Folder);
                 string baseName = SafeFileName(String.IsNullOrWhiteSpace(nameBox.Text) ? Tr("Nova gravação") : nameBox.Text);
                 string name = baseName;
                 string path = Path.Combine(settings.Folder, name + ".json");
-                int suffix = 2;
-                while (File.Exists(path))
+                if (File.Exists(path))
                 {
-                    name = baseName + " " + suffix.ToString();
-                    path = Path.Combine(settings.Folder, name + ".json");
-                    suffix++;
+                    DialogResult replace = MessageBox.Show(this,
+                        Tr("Já existe um macro com esse nome. Deseja substituir os dados e as opções salvas?"),
+                        Tr("Substituir macro?"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                    if (replace != DialogResult.Yes) return false;
                 }
-                MacroFile macro = new MacroFile { Version = 1, Name = name, CreatedAt = DateTime.Now, Events = new List<MacroEvent>(pendingEvents) };
-                File.WriteAllText(path, json.Serialize(macro), Encoding.UTF8);
+                MacroFile macro = new MacroFile {
+                    Version = 1,
+                    Name = name,
+                    CreatedAt = DateTime.Now,
+                    Events = new List<MacroEvent>(pendingEvents),
+                    CycleInfinite = infiniteCheck.Checked,
+                    IntervalMinutes = (int)minutesInput.Value,
+                    IntervalSeconds = (int)secondsInput.Value
+                };
+                WriteMacroAtomically(path, json.Serialize(macro));
                 pendingEvents = null;
+                pendingPreviewActive = false;
+                macroSettingsDirty = false;
+                activeMacro = macro;
+                activeMacroPath = path;
+                settings.SelectedFile = path;
+                SaveSettings();
                 saveButton.Enabled = false;
                 LoadMacros(path);
                 eventsLabel.Text = Tr("Gravação salva");
@@ -1080,6 +1149,107 @@ namespace MacroDeck
                 UpdateRuntimeUi("Erro ao salvar", "", false);
                 MessageBox.Show(this, Tr("Não foi possível salvar a gravação.") + "\r\n\r\n" + ex.Message, Tr("Erro ao salvar gravação"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
+            }
+        }
+
+        private bool SaveActiveMacroSettings()
+        {
+            MacroChoice selected = macroCombo.SelectedItem as MacroChoice;
+            if (!macroSettingsDirty || activeMacro == null || selected == null ||
+                !String.Equals(selected.Path, activeMacroPath, StringComparison.OrdinalIgnoreCase)) return false;
+
+            try
+            {
+                if (!File.Exists(activeMacroPath))
+                {
+                    LoadMacros();
+                    return false;
+                }
+
+                string targetPath = GetMacroSettingsTargetPath();
+                string targetName = Path.GetFileNameWithoutExtension(targetPath);
+                bool sameFile = PathsEqual(activeMacroPath, targetPath);
+                if (!sameFile && File.Exists(targetPath))
+                {
+                    DialogResult replace = MessageBox.Show(this,
+                        Tr("Já existe um macro com esse nome. Deseja substituir os dados e as opções salvas?"),
+                        Tr("Substituir macro?"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                    if (replace != DialogResult.Yes) return false;
+                }
+
+                MacroFile macroToSave;
+                if (sameFile) macroToSave = activeMacro;
+                else
+                {
+                    macroToSave = new MacroFile {
+                        Version = activeMacro.Version,
+                        Name = targetName,
+                        CreatedAt = DateTime.Now,
+                        Events = new List<MacroEvent>(activeMacro.Events ?? new List<MacroEvent>())
+                    };
+                }
+                macroToSave.Name = targetName;
+                macroToSave.CycleInfinite = infiniteCheck.Checked;
+                macroToSave.IntervalMinutes = (int)minutesInput.Value;
+                macroToSave.IntervalSeconds = (int)secondsInput.Value;
+                WriteMacroAtomically(targetPath, json.Serialize(macroToSave));
+
+                activeMacro = macroToSave;
+                activeMacroPath = targetPath;
+                settings.SelectedFile = targetPath;
+                macroSettingsDirty = false;
+                SaveSettings();
+                UpdateRuntimeUi("Macro salvo", "", false);
+                statusLabel.Text = Tr("Alterações salvas") + ": " + targetName;
+                if (sameFile)
+                {
+                    selected.Name = targetName;
+                    selected.CycleInfinite = macroToSave.CycleInfinite;
+                    selected.IntervalMinutes = macroToSave.IntervalMinutes;
+                    selected.IntervalSeconds = macroToSave.IntervalSeconds;
+                    UpdateSelectedMacro();
+                }
+                else
+                {
+                    nameBox.Text = targetName;
+                    LoadMacros(targetPath);
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                UpdateRuntimeUi("Erro ao salvar", "", false);
+                MessageBox.Show(this, Tr("Não foi possível salvar as alterações do macro.") + "\r\n\r\n" + ex.Message,
+                    Tr("Erro ao salvar gravação"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+        }
+
+        private string GetMacroSettingsTargetPath()
+        {
+            string currentName = Path.GetFileNameWithoutExtension(activeMacroPath);
+            string targetName = String.IsNullOrWhiteSpace(nameBox.Text) ? currentName : SafeFileName(nameBox.Text);
+            return Path.Combine(settings.Folder, targetName + ".json");
+        }
+
+        private static bool PathsEqual(string first, string second)
+        {
+            if (String.IsNullOrWhiteSpace(first) || String.IsNullOrWhiteSpace(second)) return false;
+            return String.Equals(Path.GetFullPath(first), Path.GetFullPath(second), StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void WriteMacroAtomically(string path, string contents)
+        {
+            string temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                File.WriteAllText(temporaryPath, contents, Encoding.UTF8);
+                if (File.Exists(path)) File.Replace(temporaryPath, path, null);
+                else File.Move(temporaryPath, path);
+            }
+            finally
+            {
+                if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
             }
         }
 
@@ -1123,7 +1293,7 @@ namespace MacroDeck
         {
             if (recording) { UpdateRuntimeUi("Pare a gravação antes de reproduzir", "", true); return; }
             if (playing) { StopPlayback(); return; }
-            if (pendingEvents != null && pendingEvents.Count > 0)
+            if (pendingEvents != null && pendingEvents.Count > 0 && pendingPreviewActive)
             {
                 MacroFile preview = new MacroFile {
                     Version = 1,
@@ -1134,9 +1304,9 @@ namespace MacroDeck
                 StartPlayback(preview);
                 return;
             }
+            MacroFile macro = activeMacro;
             MacroChoice choice = macroCombo.SelectedItem as MacroChoice;
-            if (choice == null) return;
-            MacroFile macro = ReadMacro(choice.Path);
+            if (macro == null && choice != null) macro = ReadMacro(choice.Path);
             if (macro == null || macro.Events == null || macro.Events.Count == 0)
             {
                 MessageBox.Show(this, Tr("Este arquivo não contém ações válidas para reproduzir."), Tr("Macro inválido"), MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -1264,7 +1434,7 @@ namespace MacroDeck
             statusLabel.ForeColor = recording ? Color.FromArgb(246, 115, 122) : (playing ? palette.Accent : palette.Muted);
             recordButton.Text = Tr(recording ? "Parar gravação" : "Gravar");
             recordButton.Icon = recording ? "stop" : "record";
-            playButton.Text = Tr(playing ? "Parar reprodução" : (pendingEvents != null && pendingEvents.Count > 0 ? "Testar gravação" : "Reproduzir"));
+            playButton.Text = Tr(playing ? "Parar reprodução" : (pendingEvents != null && pendingEvents.Count > 0 && pendingPreviewActive ? "Testar gravação" : "Reproduzir"));
             playButton.Icon = playing ? "stop" : "play";
             recordButton.Enabled = !playing || recording;
             playButton.Enabled = !recording || playing;
@@ -1325,11 +1495,16 @@ namespace MacroDeck
         {
             if (IsDisposed || macroCombo == null) return;
             string folder = settings.Folder;
-            string wanted = selectPath ?? settings.SelectedFile;
+            string wanted = selectPath ?? (String.IsNullOrWhiteSpace(activeMacroPath) ? settings.SelectedFile : activeMacroPath);
+            bool legacyCycleInfinite = legacyMacroDefaultCycleInfinite;
+            int legacyIntervalMinutes = legacyMacroDefaultIntervalMinutes;
+            int legacyIntervalSeconds = legacyMacroDefaultIntervalSeconds;
             int generation = Interlocked.Increment(ref macroLoadGeneration);
             ThreadPool.QueueUserWorkItem(delegate
             {
                 List<MacroChoice> choices = new List<MacroChoice>();
+                MacroFile firstMacro = null;
+                MacroFile wantedMacro = null;
                 Exception failure = null;
                 try
                 {
@@ -1342,6 +1517,20 @@ namespace MacroDeck
                     {
                         MacroFile macro = ReadMacro(files[i], reader);
                         if (macro == null) continue;
+                        bool needsPlaybackSettings = !macro.CycleInfinite.HasValue || !macro.IntervalMinutes.HasValue || !macro.IntervalSeconds.HasValue;
+                        if (needsPlaybackSettings)
+                        {
+                            if (!macro.CycleInfinite.HasValue) macro.CycleInfinite = legacyCycleInfinite;
+                            if (!macro.IntervalMinutes.HasValue) macro.IntervalMinutes = legacyIntervalMinutes;
+                            if (!macro.IntervalSeconds.HasValue) macro.IntervalSeconds = legacyIntervalSeconds;
+                            try { WriteMacroAtomically(files[i], reader.Serialize(macro)); }
+                            catch { }
+                        }
+                        if (firstMacro == null)
+                        {
+                            firstMacro = macro;
+                        }
+                        if (String.Equals(files[i], wanted, StringComparison.OrdinalIgnoreCase)) wantedMacro = macro;
                         string name = CleanMacroName(String.IsNullOrWhiteSpace(macro.Name) ? Path.GetFileNameWithoutExtension(files[i]) : macro.Name, Localization.IsEnglish(uiLanguage));
                         int duplicateCount;
                         if (displayNameCounts.TryGetValue(name, out duplicateCount))
@@ -1351,10 +1540,18 @@ namespace MacroDeck
                             name += " (" + duplicateCount.ToString() + ")";
                         }
                         else displayNameCounts.Add(name, 1);
-                        choices.Add(new MacroChoice { Path = files[i], Name = name });
+                        choices.Add(new MacroChoice {
+                            Path = files[i],
+                            Name = name,
+                            CycleInfinite = macro.CycleInfinite ?? legacyCycleInfinite,
+                            IntervalMinutes = macro.IntervalMinutes ?? legacyIntervalMinutes,
+                            IntervalSeconds = macro.IntervalSeconds ?? legacyIntervalSeconds
+                        });
                     }
                 }
                 catch (Exception ex) { failure = ex; }
+
+                MacroFile macroToActivate = wantedMacro ?? firstMacro;
 
                 if (IsDisposed || !IsHandleCreated) return;
                 PostToUi((MethodInvoker)delegate
@@ -1380,13 +1577,33 @@ namespace MacroDeck
                     MacroChoice selected = macroCombo.SelectedItem as MacroChoice;
                     if (selected == null)
                     {
+                        activeMacro = null;
+                        activeMacroPath = "";
                         settings.SelectedFile = "";
                         SaveSettings();
                         if (pendingEvents == null) eventsLabel.Text = "";
                     }
                     else
                     {
-                        settings.SelectedFile = selected.Path;
+                        bool activePathStillAvailable = false;
+                        for (int i = 0; i < choices.Count; i++)
+                        {
+                            if (String.Equals(choices[i].Path, activeMacroPath, StringComparison.OrdinalIgnoreCase))
+                            {
+                                activePathStillAvailable = true;
+                                break;
+                            }
+                        }
+                        bool shouldActivateSelection = selectPath != null || activeMacro == null || !activePathStillAvailable;
+                        if (shouldActivateSelection)
+                        {
+                            activeMacro = macroToActivate;
+                            activeMacroPath = selected.Path;
+                            settings.SelectedFile = selected.Path;
+                            ApplyMacroPlaybackSettings(selected);
+                            if (pendingEvents == null) nameBox.Text = Path.GetFileNameWithoutExtension(selected.Path);
+                        }
+                        else settings.SelectedFile = activeMacroPath;
                         SaveSettings();
                         UpdateSelectedMacro();
                     }
@@ -1410,10 +1627,77 @@ namespace MacroDeck
             catch { return null; }
         }
 
-        private void SaveSelectedMacro()
+        private void UseSelectedMacro()
         {
             MacroChoice choice = macroCombo.SelectedItem as MacroChoice;
-            if (choice != null) { settings.SelectedFile = choice.Path; SaveSettings(); }
+            if (choice == null || recording || playing || activatingMacro) return;
+
+            activatingMacro = true;
+            macroCombo.Enabled = false;
+            statusLabel.Text = Tr("Carregando macro...");
+            UpdateMacroActions();
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                MacroFile macro = ReadMacro(choice.Path, new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue });
+                if (IsDisposed || !IsHandleCreated) return;
+                PostToUi((MethodInvoker)delegate
+                {
+                    if (IsDisposed) return;
+                    activatingMacro = false;
+                    macroCombo.Enabled = true;
+                    if (macro == null || macro.Events == null || macro.Events.Count == 0)
+                    {
+                        UpdateRuntimeUi("Pronto", "", false);
+                        MessageBox.Show(this, Tr("Este arquivo não contém ações válidas para reproduzir."), Tr("Macro inválido"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        LoadMacros();
+                        return;
+                    }
+
+                    activeMacro = macro;
+                    activeMacroPath = choice.Path;
+                    settings.SelectedFile = choice.Path;
+                    pendingPreviewActive = false;
+                    ApplyMacroPlaybackSettings(choice);
+                    if (pendingEvents == null) nameBox.Text = Path.GetFileNameWithoutExtension(choice.Path);
+                    SaveSettings();
+                    UpdateMacroActions();
+                    UpdateSelectedMacro();
+                    UpdateRuntimeUi("Pronto", "", false);
+                    statusLabel.Text = Tr("Macro ativado") + ": " + choice.Name;
+                });
+            });
+        }
+
+        private void ApplyMacroPlaybackSettings(MacroChoice choice)
+        {
+            if (choice == null || !choice.HasPlaybackSettings) return;
+
+            bool cycleInfinite = choice.CycleInfinite.Value;
+            int minutes = Math.Max(0, Math.Min(choice.IntervalMinutes.Value, 9999));
+            int seconds = Math.Max(0, Math.Min(choice.IntervalSeconds.Value, 59));
+
+            applyingMacroSettings = true;
+            try
+            {
+                infiniteCheck.Checked = cycleInfinite;
+                minutesInput.Value = minutes;
+                secondsInput.Value = seconds;
+            }
+            finally { applyingMacroSettings = false; }
+
+            settings.CycleInfinite = cycleInfinite;
+            settings.Repeat = cycleInfinite;
+            settings.IntervalMinutes = minutes;
+            settings.IntervalSeconds = seconds;
+            settings.Interval = minutes * 60 + seconds;
+            settings.IntervalUnit = "segundos";
+            if (activeMacro != null)
+            {
+                activeMacro.CycleInfinite = cycleInfinite;
+                activeMacro.IntervalMinutes = minutes;
+                activeMacro.IntervalSeconds = seconds;
+            }
+            macroSettingsDirty = false;
         }
 
         private void UpdateSelectedMacro()
@@ -1425,16 +1709,37 @@ namespace MacroDeck
             }
             MacroChoice choice = macroCombo.SelectedItem as MacroChoice;
             if (choice == null) { eventsLabel.Text = ""; return; }
-            eventsLabel.Text = "";
+            eventsLabel.Text = String.Equals(choice.Path, activeMacroPath, StringComparison.OrdinalIgnoreCase)
+                ? ""
+                : Tr("Macro selecionado. Clique em Usar Macro Selecionado para ativar.");
         }
 
         private void UpdateMacroActions()
         {
             if (deleteSelectedButton == null) return;
-            deleteSelectedButton.Enabled = !recording && !playing && macroCombo.SelectedItem != null;
-            deleteAllButton.Enabled = !recording && !playing && macroCombo.Items.Count > 0;
+            deleteSelectedButton.Enabled = !recording && !playing && !activatingMacro && macroCombo.SelectedItem != null;
+            deleteAllButton.Enabled = !recording && !playing && !activatingMacro && macroCombo.Items.Count > 0;
+            if (refreshButton != null) refreshButton.Enabled = !activatingMacro;
+            if (useMacroButton != null)
+                useMacroButton.Enabled = !recording && !playing && !activatingMacro && macroCombo.SelectedItem != null;
+            if (saveButton != null)
+            {
+                bool hasRecording = !recording && !playing && pendingEvents != null && pendingEvents.Count > 0;
+                MacroChoice selected = macroCombo.SelectedItem as MacroChoice;
+                bool canSaveMacroSettings = !recording && !playing && !activatingMacro && macroSettingsDirty && activeMacro != null &&
+                    selected != null && String.Equals(selected.Path, activeMacroPath, StringComparison.OrdinalIgnoreCase);
+                string saveLabel = hasRecording || recording ? "Salvar gravação" : (macroSettingsDirty ? "Salvar alterações" : "Salvar gravação");
+                if (!hasRecording && !recording && canSaveMacroSettings)
+                {
+                    string targetPath = GetMacroSettingsTargetPath();
+                    if (!PathsEqual(targetPath, activeMacroPath) && !File.Exists(targetPath)) saveLabel = "Salvar como novo macro";
+                }
+                saveButton.Text = Tr(saveLabel);
+                saveButton.Enabled = hasRecording || canSaveMacroSettings;
+                LayoutMacroActionButtons(saveButton.Parent as RoundedPanel);
+            }
             if (playButton != null)
-                playButton.Enabled = playing || (!recording && ((pendingEvents != null && pendingEvents.Count > 0) || macroCombo.SelectedItem != null));
+                playButton.Enabled = !activatingMacro && (playing || (!recording && ((pendingEvents != null && pendingEvents.Count > 0) || macroCombo.SelectedItem != null)));
         }
 
         private void DeleteSelectedMacro()

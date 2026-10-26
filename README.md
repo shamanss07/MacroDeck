@@ -26,7 +26,7 @@ The initial release supports **Windows only**. MacroDeck is built with C# and Wi
 
 ## Install and use
 
-Download `MacroDeck-1.1.3.exe` from the GitHub **Releases** page and run it on Windows. If .NET Framework 4.8 is not installed, Windows may ask you to install it.
+Download `MacroDeck-1.1.4.exe` from the GitHub **Releases** page and run it on Windows. If .NET Framework 4.8 is not installed, Windows may ask you to install it.
 
 1. Choose the folder where you want to store macros.
 2. Enter a name and click **Record**. The default shortcut is F9.
@@ -45,7 +45,7 @@ Macros are JSON files in the selected folder. Preferences are stored in `%APPDAT
 3. Run:
 
    ```powershell
-   .\build.ps1 -OutputName MacroDeck-1.1.3.exe
+   .\build.ps1 -OutputName MacroDeck-1.1.4.exe
    ```
 
 The executable is created in the project root. You can also open `Source/MacroDeck.csproj` in Visual Studio. The OFL license in `Source/Assets/Fonts/OFL.txt` covers the included Montserrat font, not MacroDeck's code.

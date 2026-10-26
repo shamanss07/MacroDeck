@@ -4,6 +4,12 @@
 
 Only public releases are listed here. Unreleased development changes do not receive a public version entry.
 
+## 1.1.4 — macro save and playback settings fixes
+
+- Save playback settings to the active macro only, without changing settings in other saved macros.
+- Allow saving edited playback settings as a new macro when its name changes.
+- Preserve macro actions and saved playback settings when overwriting or creating a macro copy.
+
 ## 1.1.3 — smoother transitions and theme fixes
 
 - Add smoother window, page, and menu transitions, including minimize, restore, and maximize animations.

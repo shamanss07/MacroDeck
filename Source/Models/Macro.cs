@@ -18,5 +18,8 @@ namespace MacroDeck
         public string Name { get; set; }
         public DateTime CreatedAt { get; set; }
         public List<MacroEvent> Events { get; set; }
+        public bool? CycleInfinite { get; set; }
+        public int? IntervalMinutes { get; set; }
+        public int? IntervalSeconds { get; set; }
     }
 }

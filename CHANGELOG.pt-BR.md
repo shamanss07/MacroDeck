@@ -4,6 +4,12 @@
 
 As entradas abaixo registram somente versões públicas. Alterações de desenvolvimento ainda não lançadas não recebem uma versão pública.
 
+## 1.1.4 — correções ao salvar macros e opções de reprodução
+
+- Salva as opções de reprodução somente no macro ativo, sem alterar os valores dos outros macros salvos.
+- Permite salvar as opções editadas como um novo macro quando o nome é alterado.
+- Preserva as ações e as opções salvas ao substituir ou criar uma cópia do macro.
+
 ## 1.1.3 — transições mais suaves e correções de tema
 
 - Melhora as transições da janela, das páginas e do menu, incluindo minimizar, restaurar e maximizar.
