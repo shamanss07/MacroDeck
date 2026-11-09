@@ -9,7 +9,9 @@ $compilerCandidates = @(
 )
 $compiler = $compilerCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 if (-not $compiler) { throw 'O compilador do .NET Framework não foi encontrado. Abra MacroDeck.csproj no Visual Studio ou instale o .NET Framework Developer Pack.' }
-$sourceFiles = Get-ChildItem -LiteralPath $sourceRoot -Filter '*.cs' -Recurse | Select-Object -ExpandProperty FullName
+$sourceFiles = Get-ChildItem -LiteralPath $sourceRoot -Filter '*.cs' -Recurse |
+    Where-Object { $_.FullName.Substring($sourceRoot.Length + 1) -notmatch '^(bin|obj)[\\/]' } |
+    Select-Object -ExpandProperty FullName
 $fontPath = Join-Path $sourceRoot 'Assets\Fonts\Montserrat.ttf'
 $licensePath = Join-Path $sourceRoot 'Assets\Fonts\OFL.txt'
 $iconPath = Join-Path $sourceRoot 'Assets\Branding\MacroDeck.ico'

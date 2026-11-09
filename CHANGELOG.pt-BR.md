@@ -4,6 +4,20 @@
 
 As entradas abaixo registram somente versões públicas. Alterações de desenvolvimento ainda não lançadas não recebem uma versão pública.
 
+## 1.1.5 — Leitor de tela e melhorias na reprodução
+
+- Adiciona a aba Leitor para montar, reordenar, salvar e reabrir fluxos que localizam textos pelo reconhecimento do Windows ou comparam uma imagem de referência com a tela. Os fluxos salvos preservam as imagens de referência.
+- Permite importar uma imagem de arquivo, capturá-la na tela ou colá-la da área de transferência. Cada etapa pode usar o monitor inteiro como área padrão ou uma região personalizada, com tempo limite de busca e pausa após a ação.
+- Permite testar uma etapa movendo o cursor até o alvo, sem clicar. Na execução do fluxo, verifica se o alvo está estável e é único antes de clicar e interrompe a execução ao pressionar Esc ou se a janela alvo ou a configuração dos monitores mudar.
+- Direciona o atalho global de Reproduzir/Parar para a aba ativa e permite interromper um macro ou fluxo em execução mesmo após trocar de aba. Melhora as transições, o alinhamento dos painéis do Leitor e as bordas das listas suspensas.
+- Aumenta a precisão da gravação e da reprodução com temporização mais fina, captura mais frequente do mouse e registro da posição inicial do cursor. Reproduz ações nas coordenadas gravadas e mantém a compatibilidade com macros antigos.
+- Adiciona opções por macro para pequenas variações no tempo e na posição do cursor e para mover o cursor suavemente até o ponto inicial antes e depois de cada ciclo concluído. Ambas vêm desativadas.
+- Solta teclas e botões do mouse mantidos pressionados ao interromper um macro e aguarda a conclusão dessa limpeza antes de iniciar outra operação ou fechar o aplicativo.
+- Aplica os valores digitados de repetição antes de reproduzir ou salvar, preserva alterações pendentes ao trocar de idioma e salva as opções dos macros e as preferências do aplicativo sem deixar arquivos gravados pela metade.
+- Minimiza para a área de notificação do Windows, de onde o aplicativo pode ser restaurado ou fechado. Os atalhos globais continuam disponíveis.
+- Avisa ao abrir sem privilégios de administrador. Permite reiniciar como administrador ou lembrar de solicitar essa permissão nas próximas aberturas. O Windows ainda pede aprovação quando necessário.
+- Corrige o script de compilação local para ignorar arquivos gerados por compilações anteriores no Visual Studio.
+
 ## 1.1.4 — correções ao salvar macros e opções de reprodução
 
 - Salva as opções de reprodução somente no macro ativo, sem alterar os valores dos outros macros salvos.

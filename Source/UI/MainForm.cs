@@ -16,6 +16,40 @@ namespace MacroDeck
     internal sealed class MainForm : ChromeForm
     {
         private const int MaxEvents = 250000;
+        private const int PlaybackHotkeyId = 0x4D44;
+        private bool nativePlaybackRegistered;
+        [DllImport("user32.dll", SetLastError=true)] private static extern bool RegisterHotKey(IntPtr window,int id,uint modifiers,uint key);
+        [DllImport("user32.dll")] private static extern bool UnregisterHotKey(IntPtr window,int id);
+
+        public bool IsNativePlaybackHotkey(int key,bool ctrl,bool alt,bool shift,bool win)
+        {
+            return nativePlaybackRegistered && playHotkey!=null && playHotkey.Key==key && playHotkey.Ctrl==ctrl && playHotkey.Alt==alt && playHotkey.Shift==shift && playHotkey.Win==win;
+        }
+
+        private void RefreshNativePlaybackHotkey()
+        {
+            if(!IsHandleCreated)return;
+            if(nativePlaybackRegistered)UnregisterHotKey(Handle,PlaybackHotkeyId);
+            nativePlaybackRegistered=false;
+            if(playHotkey==null || capturePlay || captureRecord || Disposing || IsDisposed)return;
+            uint modifiers=0x4000u|(playHotkey.Alt?1u:0)|(playHotkey.Ctrl?2u:0)|(playHotkey.Shift?4u:0)|(playHotkey.Win?8u:0);
+            nativePlaybackRegistered=RegisterHotKey(Handle,PlaybackHotkeyId,modifiers,(uint)playHotkey.Key);
+        }
+
+        protected override void OnHandleDestroyed(EventArgs e)
+        {
+            if(nativePlaybackRegistered)UnregisterHotKey(Handle,PlaybackHotkeyId);
+            nativePlaybackRegistered=false;
+            base.OnHandleDestroyed(e);
+        }
+        private const uint InputMouse = 0;
+        private const uint MouseFlagWheel = 0x0800;
+        private const uint CreateWaitableTimerHighResolution = 0x00000002;
+        private const uint TimerModifyStateAndSynchronize = 0x00100002;
+        private const uint WaitObject0 = 0;
+        private const uint WaitFailed = 0xFFFFFFFF;
+        private const uint InfiniteWait = 0xFFFFFFFF;
+        private const long TimerSpinThresholdUs = 500;
         private readonly string configPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroDeck", "settings.json");
         private readonly JavaScriptSerializer json = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue };
         private readonly object eventsLock = new object();
@@ -25,6 +59,57 @@ namespace MacroDeck
         private static readonly uint[] MouseData = { 0, 0, 0, 1, 2 };
         private static readonly int CurrentProcessId = Process.GetCurrentProcess().Id;
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativePoint
+        {
+            public int X;
+            public int Y;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MouseInput
+        {
+            public int X;
+            public int Y;
+            public uint Data;
+            public uint Flags;
+            public uint Time;
+            public IntPtr ExtraInfo;
+        }
+
+        [StructLayout(LayoutKind.Explicit)]
+        private struct InputUnion
+        {
+            [FieldOffset(0)] public MouseInput Mouse;
+            [FieldOffset(0)] public KeyboardInput Keyboard;
+            [FieldOffset(0)] public HardwareInput Hardware;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct KeyboardInput
+        {
+            public ushort VirtualKey;
+            public ushort ScanCode;
+            public uint Flags;
+            public uint Time;
+            public IntPtr ExtraInfo;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct HardwareInput
+        {
+            public uint Message;
+            public ushort ParameterLow;
+            public ushort ParameterHigh;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativeInput
+        {
+            public uint Type;
+            public InputUnion Data;
+        }
+
         private AppSettings settings;
         private string uiLanguage = "pt-BR";
         private bool legacyMacroDefaultCycleInfinite;
@@ -32,6 +117,8 @@ namespace MacroDeck
         private int legacyMacroDefaultIntervalSeconds;
         private NativeHooks hooks;
         private List<MacroEvent> pendingEvents;
+        private int? recordingStartMouseX;
+        private int? recordingStartMouseY;
         private MacroFile activeMacro;
         private string activeMacroPath = "";
         private readonly Stopwatch recordClock = new Stopwatch();
@@ -39,6 +126,7 @@ namespace MacroDeck
         private volatile bool playing;
         private CancellationTokenSource playbackCancel;
         private int playbackGeneration;
+        private bool closeAfterPlayback;
         private bool recordLimitQueued;
         private bool captureRecord;
         private bool capturePlay;
@@ -48,8 +136,8 @@ namespace MacroDeck
         private bool activatingMacro;
         private bool macroSettingsDirty;
         private bool folderPickerInProgress;
-        private bool activeClickerPage;
-        private bool pageTransitionTarget;
+        private int activePageIndex;
+        private int pageTransitionTarget;
         private int macroLoadGeneration;
         private string currentMonitorDevice = "";
 
@@ -58,20 +146,25 @@ namespace MacroDeck
         private ThemePalette palette;
         private OptionsForm optionsDialog;
         private AboutForm aboutDialog;
+        private TrayIconController trayIcon;
+        private bool hiddenToTray;
+        private FormWindowState trayRestoreState = FormWindowState.Normal;
 
         private Label titleLabel, subtitleLabel, statusLabel, eventsLabel;
         private Label recordKeyLabel, playKeyLabel, recordKeyValue, playKeyValue, keyStatusLabel, folderLabel;
         private Label autoClickerTitle, autoClickerHint;
         private RoundedButton recordButton, playButton, themeButton, folderButton;
         private RoundedButton setRecordKeyButton, setPlayKeyButton, refreshButton, deleteSelectedButton, deleteAllButton, saveButton, useMacroButton;
-        private RoundedButton macroNavButton, clickerNavButton, menuButton;
+        private RoundedButton macroNavButton, clickerNavButton, visualNavButton, menuButton;
         private ModernTextBox nameBox, folderBox;
         private MacroSelector macroCombo;
         private AnimatedToggle infiniteCheck;
+        private AnimatedToggle variationCheck, smoothReturnCheck;
         private StepperInput minutesInput, secondsInput;
         private Panel headerPanel, autoClickerPage;
         private BufferedPanel pageHost;
         private ModernScrollViewer macroPage;
+        private VisualRecognitionPage visualRecognitionPage;
         private ModernMenuPopup appMenu;
         private ModernToolTip toolTips;
         private System.Windows.Forms.Timer themeTransitionTimer;
@@ -83,11 +176,31 @@ namespace MacroDeck
 
         [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
-        [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
+        [DllImport("user32.dll", SetLastError = true)] private static extern bool SetCursorPos(int x, int y);
+        [DllImport("user32.dll", SetLastError = true)] private static extern bool GetCursorPos(out NativePoint point);
         [DllImport("user32.dll")] private static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
-        [DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+        [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint inputCount, NativeInput[] inputs, int inputSize);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "CreateWaitableTimerExW")]
+        private static extern IntPtr CreateWaitableTimerEx(IntPtr attributes, string name, uint flags, uint desiredAccess);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr CreateWaitableTimer(IntPtr attributes, bool manualReset, string name);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool SetWaitableTimer(IntPtr timer, ref long dueTime, int period, IntPtr completionRoutine, IntPtr argument, bool resume);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern uint WaitForMultipleObjects(uint count, IntPtr[] handles, bool waitAll, uint milliseconds);
+        [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr handle);
+        [DllImport("winmm.dll")] private static extern uint timeBeginPeriod(uint period);
+        [DllImport("winmm.dll")] private static extern uint timeEndPeriod(uint period);
 
         public long RecordElapsedMs { get { return recordClock.ElapsedMilliseconds; } }
+        public long RecordElapsedMicroseconds
+        {
+            get
+            {
+                long elapsedTicks = recordClock.ElapsedTicks;
+                return elapsedTicks * 1000000L / Stopwatch.Frequency;
+            }
+        }
         public bool IsRecording { get { return recording; } }
         public bool IsMacroDeckForeground
         {
@@ -134,6 +247,7 @@ namespace MacroDeck
             ApplyTheme();
             FormClosing += OnClosing;
             UpdateRuntimeUi("Pronto", "", false);
+            trayIcon = new TrayIconController(Icon, Tr, RestoreFromTray, Close);
         }
 
         private AppSettings LoadSettings()
@@ -179,6 +293,10 @@ namespace MacroDeck
                 s.Interval = minutes * 60 + seconds;
                 s.IntervalUnit = "segundos";
                 s.SelectedFile = loaded.SelectedFile ?? "";
+                s.ReaderMonitorDevice = loaded.ReaderMonitorDevice ?? "";
+                s.VaryPlayback = loaded.VaryPlayback;
+                s.SmoothCursorReturn = loaded.SmoothCursorReturn;
+                s.AlwaysRunAsAdministrator = loaded.AlwaysRunAsAdministrator;
             }
             catch { }
             return s;
@@ -189,7 +307,7 @@ namespace MacroDeck
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(configPath));
-                File.WriteAllText(configPath, json.Serialize(settings), Encoding.UTF8);
+                WriteMacroAtomically(configPath, json.Serialize(settings));
             }
             catch { }
         }
@@ -210,9 +328,11 @@ namespace MacroDeck
             titleLabel = new Label { Text = "MacroDeck", AutoSize = true, Location = new Point(0, 0), Font = FontManager.Create(22f, FontStyle.Bold), ForeColor = palette.Text };
             subtitleLabel = new Label { Text = Tr("Grave, organize e reproduza ações."), AutoSize = true, Location = new Point(2, 42), Font = FontManager.Create(8.5f, FontStyle.Regular), ForeColor = palette.Muted, Tag = "muted" };
             macroNavButton = MakeButton("Macro", 0, 25, 88, 38, true);
-            macroNavButton.Click += delegate { SetActivePage(false); };
+            macroNavButton.Click += delegate { SetActivePage(0); };
+            visualNavButton = MakeButton(Tr("Leitor"), 0, 25, 88, 38, false);
+            visualNavButton.Click += delegate { SetActivePage(2); };
             clickerNavButton = MakeButton("Auto-Clicker", 0, 25, 128, 38, false);
-            clickerNavButton.Click += delegate { SetActivePage(true); };
+            clickerNavButton.Click += delegate { SetActivePage(1); };
             themeButton = MakeButton(Tr("Claro"), 0, 25, 94, 38, false);
             themeButton.Icon = "sun";
             themeButton.Click += delegate { BeginThemeTransition(); };
@@ -220,7 +340,7 @@ namespace MacroDeck
             menuButton.Icon = "chevron";
             menuButton.Click += delegate { ShowAppMenu(); };
             headerPanel.Controls.Add(titleLabel); headerPanel.Controls.Add(subtitleLabel);
-            headerPanel.Controls.Add(macroNavButton); headerPanel.Controls.Add(clickerNavButton);
+            headerPanel.Controls.Add(macroNavButton); headerPanel.Controls.Add(visualNavButton); headerPanel.Controls.Add(clickerNavButton);
             headerPanel.Controls.Add(themeButton); headerPanel.Controls.Add(menuButton);
             headerPanel.Resize += PositionHeaderActions;
             root.Controls.Add(headerPanel, 0, 0);
@@ -230,6 +350,7 @@ namespace MacroDeck
             root.Controls.Add(pageHost, 0, 1);
             BuildMacroPage();
             BuildAutoClickerPage();
+            BuildVisualRecognitionPage();
             pageHost.ResumeLayout(true);
 
             CreateAppMenu();
@@ -239,6 +360,7 @@ namespace MacroDeck
             toolTips.SetToolTip(saveButton, Tr("Salva a gravação atual como um novo macro."), this);
             toolTips.SetToolTip(refreshButton, Tr("Atualiza a lista de macros salvos."), this);
             PositionHeaderActions(null, EventArgs.Empty);
+            ApplyActivePage(activePageIndex);
             root.ResumeLayout(true);
             ResumeLayout(true);
         }
@@ -250,7 +372,10 @@ namespace MacroDeck
             menuButton.Left = right - menuButton.Width;
             themeButton.Left = menuButton.Left - 8 - themeButton.Width;
             clickerNavButton.Left = themeButton.Left - 8 - clickerNavButton.Width;
-            macroNavButton.Left = clickerNavButton.Left - 6 - macroNavButton.Width;
+            visualNavButton.Left = clickerNavButton.Left - 6 - visualNavButton.Width;
+            macroNavButton.Left = visualNavButton.Left - 6 - macroNavButton.Width;
+            int top = macroNavButton.Left < subtitleLabel.Right + 12 ? subtitleLabel.Bottom + 6 : Math.Max(0, (headerPanel.ClientSize.Height - menuButton.Height) / 2 - 8);
+            foreach (RoundedButton navigation in new RoundedButton[] { macroNavButton, visualNavButton, clickerNavButton, themeButton, menuButton }) navigation.Top = top;
         }
 
         private void BuildMacroPage()
@@ -258,7 +383,7 @@ namespace MacroDeck
             macroPage = new ModernScrollViewer { Dock = DockStyle.Fill, Tag = "surface" };
             pageHost.Controls.Add(macroPage);
             BufferedTableLayoutPanel grid = new BufferedTableLayoutPanel {
-                Dock = DockStyle.Top, ColumnCount = 2, RowCount = 3, AutoSize = true,
+                Dock = DockStyle.Top, ColumnCount = 2, RowCount = 4, AutoSize = true,
                 GrowStyle = TableLayoutPanelGrowStyle.AddRows, Tag = "surface", Padding = new Padding(0, 0, 0, 5)
             };
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
@@ -266,6 +391,7 @@ namespace MacroDeck
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 158));
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 258));
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 174));
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 132));
             grid.SuspendLayout();
             macroPage.Content = grid;
 
@@ -420,6 +546,38 @@ namespace MacroDeck
             minutesInput.ValueChanged += delegate { if (!applyingMacroSettings) SaveIntervalSettings(); };
             secondsInput.ValueChanged += delegate { if (!applyingMacroSettings) SaveIntervalSettings(); };
             grid.Controls.Add(intervalCard, 1, 2);
+            RoundedPanel playbackOptions = CreateCard();
+            playbackOptions.Dock = DockStyle.Fill;
+            AddSectionTitle(playbackOptions, Tr("OPÇÕES DE REPRODUÇÃO"), 19, 14);
+            variationCheck = new AnimatedToggle { Text = Tr("Variação leve"), Location = new Point(20, 44), Size = new Size(300, 30), Font = FontManager.Create(8.5f, FontStyle.Bold) };
+            smoothReturnCheck = new AnimatedToggle { Text = Tr("Retorno suave ao início"), Location = new Point(400, 44), Size = new Size(300, 30), Font = FontManager.Create(8.5f, FontStyle.Bold) };
+            variationCheck.SetInitialChecked(settings.VaryPlayback);
+            smoothReturnCheck.SetInitialChecked(settings.SmoothCursorReturn);
+            Label variationHint = MakeCaption(Tr("Até 1 px; pequenos ajustes nos tempos."), 20, 81);
+            Label smoothHint = MakeCaption(Tr("Antes e depois de cada ciclo concluído."), 400, 81);
+            variationHint.Tag = smoothHint.Tag = "muted";
+            variationHint.AutoSize = smoothHint.AutoSize = false;
+            variationHint.Height = smoothHint.Height = 26;
+            EventHandler optionsChanged = delegate {
+                if (applyingMacroSettings) return;
+                settings.VaryPlayback = variationCheck.Checked;
+                settings.SmoothCursorReturn = smoothReturnCheck.Checked;
+                macroSettingsDirty = true;
+                SaveSettings(); UpdateMacroActions();
+            };
+            variationCheck.CheckedChanged += optionsChanged;
+            smoothReturnCheck.CheckedChanged += optionsChanged;
+            playbackOptions.Controls.Add(variationCheck); playbackOptions.Controls.Add(smoothReturnCheck);
+            playbackOptions.Controls.Add(variationHint); playbackOptions.Controls.Add(smoothHint);
+            playbackOptions.Resize += delegate {
+                int margin = (int)Math.Round(20 * DeviceDpi / 96.0);
+                int half = playbackOptions.ClientSize.Width / 2;
+                variationCheck.Width = variationHint.Width = Math.Max(1, half - margin * 2);
+                smoothReturnCheck.Left = smoothHint.Left = half + margin / 2;
+                smoothReturnCheck.Width = smoothHint.Width = Math.Max(1, playbackOptions.ClientSize.Width - smoothReturnCheck.Left - margin);
+            };
+            grid.Controls.Add(playbackOptions, 0, 3);
+            grid.SetColumnSpan(playbackOptions, 2);
             grid.ResumeLayout(true);
         }
 
@@ -439,99 +597,86 @@ namespace MacroDeck
             };
         }
 
-        private void SetActivePage(bool clicker)
+        private void BuildVisualRecognitionPage()
+        {
+            visualRecognitionPage = new VisualRecognitionPage(settings.Folder, uiLanguage, Tr, palette);
+            visualRecognitionPage.DefaultMonitorDevice = settings.ReaderMonitorDevice;
+            visualRecognitionPage.DefaultMonitorChanged = delegate(string device) { settings.ReaderMonitorDevice = device; SaveSettings(); };
+            visualRecognitionPage.CanStart = delegate { return !recording && !playing; };
+            pageHost.Controls.Add(visualRecognitionPage);
+        }
+
+        private Control GetPageControl(int index)
+        {
+            if (index == 1) return autoClickerPage;
+            if (index == 2) return visualRecognitionPage;
+            return macroPage;
+        }
+
+        private RoundedButton GetPageButton(int index)
+        {
+            if (index == 1) return clickerNavButton;
+            if (index == 2) return visualNavButton;
+            return macroNavButton;
+        }
+
+        private void SetActivePage(int pageIndex)
         {
             if (pageTransitionTimer != null && pageTransitionTimer.Enabled) FinishPageTransition();
-            if (clicker == activeClickerPage) return;
-            if (pageTransitionTimer == null)
+            if (pageIndex < 0 || pageIndex > 2 || pageIndex == activePageIndex) return;
+            pageTransitionTarget = pageIndex;
+            Rectangle area = pageHost.RectangleToScreen(pageHost.ClientRectangle);
+            if (!Visible || WindowState == FormWindowState.Minimized || area.Width < 2 || area.Height < 2)
             {
-                pageTransitionTimer = new System.Windows.Forms.Timer { Interval = 16 };
-                pageTransitionTimer.Tick += AnimatePageTransition;
-            }
-
-            Rectangle area = pageHost.ClientRectangle;
-            if (area.Width < 2 || area.Height < 2)
-            {
-                ApplyActivePage(clicker);
+                ApplyActivePage(pageIndex);
                 return;
             }
-
-            pageTransitionTarget = clicker;
-            Control leaving = activeClickerPage ? (Control)autoClickerPage : (Control)macroPage;
-            Control entering = clicker ? (Control)autoClickerPage : (Control)macroPage;
-            Bitmap outgoing = null;
-            Bitmap incoming = null;
-            bool captureFailed = false;
+            Bitmap frame = new Bitmap(area.Width, area.Height);
             try
             {
-                leaving.Dock = DockStyle.None;
-                leaving.Bounds = area;
-                outgoing = CapturePage(leaving, area.Size);
-
-                entering.Dock = DockStyle.None;
-                entering.Bounds = area;
-                entering.Visible = true;
-                entering.BringToFront();
-                entering.PerformLayout();
-                incoming = CapturePage(entering, area.Size);
+                // Capture the pixels actually on screen, including native text/list
+                // controls. Only this outgoing frame is faded by the window compositor.
+                using(Graphics graphics = Graphics.FromImage(frame))
+                    graphics.CopyFromScreen(area.Location, Point.Empty, area.Size);
+                transitionSurface = new PageTransitionSurface(frame) { Bounds = area };
+                frame = null;
+                transitionSurface.Show(this);
+                transitionSurface.Update();
+                ApplyActivePage(pageIndex);
+                GetPageControl(pageIndex).Update();
+                if (pageTransitionTimer == null)
+                {
+                    pageTransitionTimer = new System.Windows.Forms.Timer { Interval = 16 };
+                    pageTransitionTimer.Tick += AnimatePageTransition;
+                }
+                pageTransitionClock.Restart();
+                UiAnimationClock.Begin();
+                pageTransitionTimer.Start();
             }
             catch
             {
-                if (outgoing != null) outgoing.Dispose();
-                if (incoming != null) incoming.Dispose();
-                captureFailed = true;
-            }
-            finally
-            {
-                entering.Visible = false;
-                leaving.Visible = true;
-            }
-            if (captureFailed)
-            {
-                ApplyActivePage(clicker);
-                return;
-            }
-
-            transitionSurface = new PageTransitionSurface(outgoing, incoming, palette.Background) { Dock = DockStyle.Fill };
-            pageHost.Controls.Add(transitionSurface);
-            transitionSurface.BringToFront();
-            leaving.Visible = false;
-            entering.Visible = false;
-            macroNavButton.Tag = clicker ? "secondary" : "selected";
-            clickerNavButton.Tag = clicker ? "selected" : "secondary";
-            ApplyControlTheme(headerPanel);
-            pageTransitionClock.Restart();
-            UiAnimationClock.Begin();
-            pageTransitionTimer.Start();
-        }
-
-        private static Bitmap CapturePage(Control page, Size size)
-        {
-            Bitmap bitmap = new Bitmap(size.Width, size.Height);
-            try
-            {
-                page.DrawToBitmap(bitmap, new Rectangle(Point.Empty, size));
-                return bitmap;
-            }
-            catch
-            {
-                bitmap.Dispose();
-                throw;
+                if(frame != null)frame.Dispose();
+                FinishPageTransition();
             }
         }
-
-        private void ApplyActivePage(bool clicker)
+        private void ApplyActivePage(int pageIndex)
         {
-            activeClickerPage = clicker;
-            macroPage.Dock = DockStyle.Fill;
-            autoClickerPage.Dock = DockStyle.Fill;
-            macroPage.Location = Point.Empty;
-            autoClickerPage.Location = Point.Empty;
-            macroPage.Visible = !clicker;
-            autoClickerPage.Visible = clicker;
-            macroNavButton.Tag = clicker ? "secondary" : "selected";
-            clickerNavButton.Tag = clicker ? "selected" : "secondary";
+            activePageIndex = Math.Max(0, Math.Min(2, pageIndex));
+            for (int index = 0; index < 3; index++)
+            {
+                Control page = GetPageControl(index);
+                page.Dock = DockStyle.Fill;
+                page.Location = Point.Empty;
+                page.Visible = index == activePageIndex;
+            }
+            SetSelectedPageButton(activePageIndex);
             ApplyControlTheme(headerPanel);
+        }
+
+        private void SetSelectedPageButton(int pageIndex)
+        {
+            for (int index = 0; index < 3; index++)
+                GetPageButton(index).Tag = index == pageIndex ? "selected" : "secondary";
         }
 
         private void FinishPageTransition()
@@ -542,13 +687,13 @@ namespace MacroDeck
                 UiAnimationClock.End();
             }
             pageTransitionClock.Stop();
+            ApplyActivePage(pageTransitionTarget);
             if (transitionSurface != null)
             {
-                pageHost.Controls.Remove(transitionSurface);
+                transitionSurface.Hide();
                 transitionSurface.Dispose();
                 transitionSurface = null;
             }
-            ApplyActivePage(pageTransitionTarget);
         }
 
         private void AnimatePageTransition(object sender, EventArgs e)
@@ -575,11 +720,52 @@ namespace MacroDeck
 
         protected override void OnResize(EventArgs e)
         {
+            if (!hiddenToTray && WindowState != FormWindowState.Minimized) trayRestoreState = WindowState;
+            if(transitionSurface != null)FinishPageTransition();
             base.OnResize(e);
             if (themeTransitionTimer != null && themeTransitionTimer.Enabled &&
                 (WindowState == FormWindowState.Minimized || themeTransitionSurface == null || themeTransitionSurface.Size != ClientSize))
                 FinishThemeTransition();
             if (WindowState == FormWindowState.Minimized && appMenu != null && !appMenu.IsDisposed) appMenu.Dismiss();
+            if (WindowState == FormWindowState.Minimized) MinimizeToTray();
+        }
+
+        private void MinimizeToTray()
+        {
+            if (trayIcon == null || hiddenToTray || IsDisposed || Disposing) return;
+            trayIcon.Show();
+            hiddenToTray = true;
+            // Hiding removes the taskbar button without recreating the window handle,
+            // so the registered shortcuts remain available in the background.
+            Hide();
+        }
+
+        private void RestoreFromTray()
+        {
+            if (IsDisposed || Disposing || closeAfterPlayback) return;
+            if (visualRecognitionPage != null && visualRecognitionPage.IsSelecting) return;
+            if (hiddenToTray || WindowState == FormWindowState.Minimized)
+            {
+                // Show the native window before restoring its state. Restoring a
+                // hidden minimized Form first can leave it minimized after Show().
+                hiddenToTray = true;
+                if (!Visible) Show();
+                WindowState = trayRestoreState;
+                hiddenToTray = false;
+                FitToWorkingArea();
+            }
+            if (!Visible) Show();
+            Activate();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && trayIcon != null)
+            {
+                trayIcon.Dispose();
+                trayIcon = null;
+            }
+            base.Dispose(disposing);
         }
 
         private void ApplyMenuTheme()
@@ -612,6 +798,7 @@ namespace MacroDeck
                 }
                 settings.FontFamily = optionsDialog.SelectedFontFamily;
                 settings.Language = optionsDialog.SelectedLanguage;
+                settings.AlwaysRunAsAdministrator = optionsDialog.AlwaysRunAsAdministrator;
                 FontManager.SetPreferredFamily(settings.FontFamily);
                 palette = ThemePalette.From(settings);
                 SaveSettings();
@@ -628,8 +815,11 @@ namespace MacroDeck
 
         private void RebuildUiForLanguage()
         {
+            CommitPlaybackTiming();
+            string recordingName = nameBox.Text;
             if (pageTransitionTimer != null && pageTransitionTimer.Enabled) FinishPageTransition();
-            bool showClickerPage = activeClickerPage;
+            int showPage = activePageIndex;
+            VisualWorkflow visualDraft = visualRecognitionPage == null ? null : visualRecognitionPage.ExportDraft();
             if (pageTransitionTimer != null)
             {
                 if (pageTransitionTimer.Enabled) UiAnimationClock.End();
@@ -653,12 +843,12 @@ namespace MacroDeck
 
             uiLanguage = settings.Language;
             ApplyChromeLanguage(uiLanguage);
-            activeClickerPage = showClickerPage;
+            if (trayIcon != null) trayIcon.RefreshLanguage();
+            activePageIndex = showPage;
             BuildUi();
-            macroPage.Visible = !showClickerPage;
-            autoClickerPage.Visible = showClickerPage;
-            macroPage.Dock = DockStyle.Fill;
-            autoClickerPage.Dock = DockStyle.Fill;
+            nameBox.Text = recordingName;
+            visualRecognitionPage.RestoreDraft(visualDraft);
+            ApplyActivePage(showPage);
             ApplyFontTree(this);
             ApplyTheme();
             UpdateHotkeyLabels();
@@ -748,8 +938,7 @@ namespace MacroDeck
             foreach (Control c in ContentPanel.Controls) ApplyControlTheme(c);
             themeButton.Text = Tr(settings.DarkTheme ? "Claro" : "Escuro");
             themeButton.Icon = settings.DarkTheme ? "sun" : "moon";
-            clickerNavButton.Tag = activeClickerPage ? "selected" : "secondary";
-            macroNavButton.Tag = activeClickerPage ? "secondary" : "selected";
+            SetSelectedPageButton(activePageIndex);
             ApplyControlTheme(headerPanel);
             if (toolTips != null) toolTips.ApplyTheme(palette.Card, palette.Text, palette.Border);
             if (macroPage != null) macroPage.ApplyTheme(palette.Background, palette.Background, palette.Border);
@@ -872,6 +1061,10 @@ namespace MacroDeck
                     button.BackColor = active ? Color.FromArgb(193, 64, 73) : (primary ? palette.Accent : palette.Input);
                     button.ForeColor = primary || active ? Color.White : palette.Text;
                 }
+                ComboBox combo = c as ComboBox;
+                if (combo != null) { combo.BackColor = palette.Input; combo.ForeColor = palette.Text; }
+                VisualRecognitionPage recognitionPage = c as VisualRecognitionPage;
+                if (recognitionPage != null) recognitionPage.ApplyTheme(palette);
                 ApplyControlTheme(c);
             }
         }
@@ -879,6 +1072,8 @@ namespace MacroDeck
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
+            if (trayIcon != null) trayIcon.Show();
+            RefreshNativePlaybackHotkey();
             FitToWorkingArea();
             BeginInvoke((MethodInvoker)delegate
             {
@@ -914,6 +1109,7 @@ namespace MacroDeck
 
         protected override void OnLocationChanged(EventArgs e)
         {
+            if(transitionSurface != null)FinishPageTransition();
             base.OnLocationChanged(e);
             if (!IsHandleCreated || IsDisposed) return;
             Screen screen = Screen.FromControl(this);
@@ -924,6 +1120,11 @@ namespace MacroDeck
 
         protected override void WndProc(ref Message message)
         {
+            if(message.Msg==0x0312 && message.WParam.ToInt32()==PlaybackHotkeyId) {
+                if(!capturePlay && !captureRecord && playHotkey!=null)
+                    TryHotkey(playHotkey.Key,playHotkey.Ctrl,playHotkey.Alt,playHotkey.Shift,playHotkey.Win);
+                return;
+            }
             base.WndProc(ref message);
             if (message.Msg == 0x007E && IsHandleCreated && !IsDisposed)
             {
@@ -968,6 +1169,7 @@ namespace MacroDeck
 
         private void UpdateHotkeyLabels()
         {
+            RefreshNativePlaybackHotkey();
             if (recordKeyLabel != null) recordKeyLabel.Text = Tr("Gravar/Parar");
             if (playKeyLabel != null) playKeyLabel.Text = Tr("Reproduzir/Parar");
             if (recordKeyValue != null) recordKeyValue.Text = recordHotkey == null ? Tr("Não definido") : recordHotkey.Text;
@@ -985,6 +1187,7 @@ namespace MacroDeck
                 {
                     setRecordKeyButton.Text = Tr("Definir"); setPlayKeyButton.Text = Tr("Definir");
                     SetKeyStatus("Alteração cancelada");
+                    RefreshNativePlaybackHotkey();
                 });
                 return true;
             }
@@ -999,6 +1202,7 @@ namespace MacroDeck
                 {
                     setRecordKeyButton.Text = Tr("Definir"); setPlayKeyButton.Text = Tr("Definir");
                     SetKeyStatus("Escolha dois atalhos diferentes");
+                    RefreshNativePlaybackHotkey();
                 });
                 return true;
             }
@@ -1025,6 +1229,7 @@ namespace MacroDeck
         private void BeginCapture(bool record)
         {
             captureRecord = record; capturePlay = !record;
+            RefreshNativePlaybackHotkey();
             setRecordKeyButton.Text = record ? Tr("Pressione...") : Tr("Definir");
             setPlayKeyButton.Text = record ? Tr("Definir") : Tr("Pressione...");
             SetKeyStatus("Pressione uma tecla ou Esc para cancelar");
@@ -1039,14 +1244,35 @@ namespace MacroDeck
 
         public bool TryHotkey(int vk, bool ctrl, bool alt, bool shift, bool win)
         {
+            bool playbackKey = playHotkey != null && playHotkey.Key == vk && playHotkey.Ctrl == ctrl && playHotkey.Alt == alt && playHotkey.Shift == shift && playHotkey.Win == win;
+            if (playing && playbackKey)
+            {
+                PostToUi((MethodInvoker)delegate { StopPlayback(); });
+                return true;
+            }
+            if (visualRecognitionPage != null && visualRecognitionPage.IsSelecting) return false;
+            if (visualRecognitionPage != null && visualRecognitionPage.IsRunning)
+            {
+                if (vk == (int)Keys.Escape || (playHotkey != null && playHotkey.Key == vk && playHotkey.Ctrl == ctrl && playHotkey.Alt == alt && playHotkey.Shift == shift && playHotkey.Win == win))
+                {
+                    visualRecognitionPage.StopExecution();
+                    return true;
+                }
+                return false;
+            }
             if (recordHotkey != null && recordHotkey.Key == vk && recordHotkey.Ctrl == ctrl && recordHotkey.Alt == alt && recordHotkey.Shift == shift && recordHotkey.Win == win)
             {
+                if(!recording && (pageTransitionTimer != null && pageTransitionTimer.Enabled ? pageTransitionTarget : activePageIndex) != 0)return false;
                 PostToUi((MethodInvoker)delegate { ToggleRecording(); });
                 return true;
             }
             if (playHotkey != null && playHotkey.Key == vk && playHotkey.Ctrl == ctrl && playHotkey.Alt == alt && playHotkey.Shift == shift && playHotkey.Win == win)
             {
-                PostToUi((MethodInvoker)delegate { TogglePlayback(); });
+                int page = pageTransitionTimer != null && pageTransitionTimer.Enabled ? pageTransitionTarget : activePageIndex;
+                PostToUi((MethodInvoker)delegate {
+                    if(page==2)visualRecognitionPage.ToggleExecution();
+                    else if(page==0)TogglePlayback();
+                });
                 return true;
             }
             return false;
@@ -1054,9 +1280,12 @@ namespace MacroDeck
 
         private void ToggleRecording()
         {
+            if (visualRecognitionPage != null && visualRecognitionPage.IsRunning) return;
             if (recording) { StopRecording(); return; }
             if (playing) { UpdateRuntimeUi("Pare a reprodução antes de gravar", "", true); return; }
             pendingEvents = null;
+            recordingStartMouseX = null;
+            recordingStartMouseY = null;
             pendingPreviewActive = false;
             saveButton.Enabled = false;
             lock (eventsLock) recordedEvents.Clear();
@@ -1073,6 +1302,7 @@ namespace MacroDeck
             }
             recordClock.Reset(); recordClock.Start();
             recording = true;
+            if (!IsMacroDeckForeground) CaptureRecordingStartPositionFromCursor();
             eventsLabel.Text = "";
             UiSounds.RecordingStart();
             UpdateRuntimeUi("Gravando", "", true);
@@ -1089,7 +1319,7 @@ namespace MacroDeck
             lock (eventsLock)
             {
                 copy = new List<MacroEvent>(recordedEvents);
-                BalanceInputs(copy, recordClock.ElapsedMilliseconds);
+                BalanceInputs(copy, RecordElapsedMicroseconds);
             }
             pendingEvents = copy.Count == 0 ? null : copy;
             pendingPreviewActive = pendingEvents != null;
@@ -1107,6 +1337,7 @@ namespace MacroDeck
 
         private bool SaveRecording()
         {
+            CommitPlaybackTiming();
             if (pendingEvents == null || pendingEvents.Count == 0) return SaveActiveMacroSettings();
             try
             {
@@ -1128,7 +1359,11 @@ namespace MacroDeck
                     Events = new List<MacroEvent>(pendingEvents),
                     CycleInfinite = infiniteCheck.Checked,
                     IntervalMinutes = (int)minutesInput.Value,
-                    IntervalSeconds = (int)secondsInput.Value
+                    IntervalSeconds = (int)secondsInput.Value,
+                    VaryPlayback = variationCheck.Checked,
+                    SmoothCursorReturn = smoothReturnCheck.Checked,
+                    StartMouseX = recordingStartMouseX,
+                    StartMouseY = recordingStartMouseY
                 };
                 WriteMacroAtomically(path, json.Serialize(macro));
                 pendingEvents = null;
@@ -1154,6 +1389,7 @@ namespace MacroDeck
 
         private bool SaveActiveMacroSettings()
         {
+            CommitPlaybackTiming();
             MacroChoice selected = macroCombo.SelectedItem as MacroChoice;
             if (!macroSettingsDirty || activeMacro == null || selected == null ||
                 !String.Equals(selected.Path, activeMacroPath, StringComparison.OrdinalIgnoreCase)) return false;
@@ -1177,21 +1413,7 @@ namespace MacroDeck
                     if (replace != DialogResult.Yes) return false;
                 }
 
-                MacroFile macroToSave;
-                if (sameFile) macroToSave = activeMacro;
-                else
-                {
-                    macroToSave = new MacroFile {
-                        Version = activeMacro.Version,
-                        Name = targetName,
-                        CreatedAt = DateTime.Now,
-                        Events = new List<MacroEvent>(activeMacro.Events ?? new List<MacroEvent>())
-                    };
-                }
-                macroToSave.Name = targetName;
-                macroToSave.CycleInfinite = infiniteCheck.Checked;
-                macroToSave.IntervalMinutes = (int)minutesInput.Value;
-                macroToSave.IntervalSeconds = (int)secondsInput.Value;
+                MacroFile macroToSave = CreateMacroSettingsSnapshot(targetName, sameFile);
                 WriteMacroAtomically(targetPath, json.Serialize(macroToSave));
 
                 activeMacro = macroToSave;
@@ -1207,6 +1429,8 @@ namespace MacroDeck
                     selected.CycleInfinite = macroToSave.CycleInfinite;
                     selected.IntervalMinutes = macroToSave.IntervalMinutes;
                     selected.IntervalSeconds = macroToSave.IntervalSeconds;
+                    selected.VaryPlayback = macroToSave.VaryPlayback;
+                    selected.SmoothCursorReturn = macroToSave.SmoothCursorReturn;
                     UpdateSelectedMacro();
                 }
                 else
@@ -1223,6 +1447,26 @@ namespace MacroDeck
                     Tr("Erro ao salvar gravação"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
+        }
+
+        private MacroFile CreateMacroSettingsSnapshot(string name, bool sameFile)
+        {
+            // Do not change the loaded macro until replacing its file succeeds.
+            return new MacroFile {
+                Version = activeMacro.Version, Name = name,
+                CreatedAt = sameFile ? activeMacro.CreatedAt : DateTime.Now,
+                Events = new List<MacroEvent>(activeMacro.Events ?? new List<MacroEvent>()),
+                StartMouseX = activeMacro.StartMouseX, StartMouseY = activeMacro.StartMouseY,
+                CycleInfinite = infiniteCheck.Checked,
+                IntervalMinutes = minutesInput.Value, IntervalSeconds = secondsInput.Value,
+                VaryPlayback = variationCheck.Checked, SmoothCursorReturn = smoothReturnCheck.Checked
+            };
+        }
+
+        private void CommitPlaybackTiming()
+        {
+            minutesInput.CommitValue();
+            secondsInput.CommitValue();
         }
 
         private string GetMacroSettingsTargetPath()
@@ -1243,7 +1487,12 @@ namespace MacroDeck
             string temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
             {
-                File.WriteAllText(temporaryPath, contents, Encoding.UTF8);
+                byte[] bytes = new UTF8Encoding(false).GetBytes(contents);
+                using (FileStream stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    stream.Write(bytes, 0, bytes.Length);
+                    stream.Flush(true);
+                }
                 if (File.Exists(path)) File.Replace(temporaryPath, path, null);
                 else File.Move(temporaryPath, path);
             }
@@ -1253,7 +1502,7 @@ namespace MacroDeck
             }
         }
 
-        private static void BalanceInputs(List<MacroEvent> events, long stopTimeMs)
+        private static void BalanceInputs(List<MacroEvent> events, long stopTimeUs)
         {
             HashSet<int> heldKeys = new HashSet<int>();
             Dictionary<int, MacroEvent> heldButtons = new Dictionary<int, MacroEvent>();
@@ -1265,19 +1514,59 @@ namespace MacroDeck
                 else if (item.Kind == "mouseDown") heldButtons[item.Code] = item;
                 else if (item.Kind == "mouseUp") heldButtons.Remove(item.Code);
             }
-            foreach (int key in heldKeys) events.Add(new MacroEvent { Kind = "keyUp", Code = key, TimeMs = stopTimeMs });
+            foreach (int key in heldKeys) events.Add(new MacroEvent { Kind = "keyUp", Code = key, TimeMs = stopTimeUs / 1000L, TimeUs = stopTimeUs });
             foreach (KeyValuePair<int, MacroEvent> entry in heldButtons)
-                events.Add(new MacroEvent { Kind = "mouseUp", Code = entry.Key, X = entry.Value.X, Y = entry.Value.Y, TimeMs = stopTimeMs });
+                events.Add(new MacroEvent { Kind = "mouseUp", Code = entry.Key, X = entry.Value.X, Y = entry.Value.Y, TimeMs = stopTimeUs / 1000L, TimeUs = stopTimeUs });
         }
 
-        public void RecordKey(string kind, int code) { if (recording) AddEvent(new MacroEvent { Kind = kind, Code = code }); }
-        public void RecordMouseMove(int x, int y) { if (recording) AddEvent(new MacroEvent { Kind = "move", X = x, Y = y }); }
-        public void RecordMouseButton(string kind, int button, int x, int y) { if (recording) AddEvent(new MacroEvent { Kind = kind, Code = button, X = x, Y = y }); }
-        public void RecordWheel(int x, int y, int delta) { if (recording) AddEvent(new MacroEvent { Kind = "wheel", X = x, Y = y, Wheel = delta }); }
+        public void RecordKey(string kind, int code)
+        {
+            if (!recording) return;
+            CaptureRecordingStartPositionFromCursor();
+            AddEvent(new MacroEvent { Kind = kind, Code = code });
+        }
+
+        public void RecordMouseMove(int x, int y)
+        {
+            if (!recording) return;
+            CaptureRecordingStartPosition(x, y);
+            AddEvent(new MacroEvent { Kind = "move", X = x, Y = y });
+        }
+
+        public void RecordMouseButton(string kind, int button, int x, int y)
+        {
+            if (!recording) return;
+            CaptureRecordingStartPosition(x, y);
+            AddEvent(new MacroEvent { Kind = kind, Code = button, X = x, Y = y });
+        }
+
+        public void RecordWheel(int x, int y, int delta)
+        {
+            if (!recording) return;
+            CaptureRecordingStartPosition(x, y);
+            AddEvent(new MacroEvent { Kind = "wheel", X = x, Y = y, Wheel = delta });
+        }
+
+        private void CaptureRecordingStartPositionFromCursor()
+        {
+            NativePoint point;
+            if (GetCursorPos(out point)) CaptureRecordingStartPosition(point.X, point.Y);
+        }
+
+        private void CaptureRecordingStartPosition(int x, int y)
+        {
+            lock (eventsLock)
+            {
+                if (recordingStartMouseX.HasValue || recordingStartMouseY.HasValue) return;
+                recordingStartMouseX = x;
+                recordingStartMouseY = y;
+            }
+        }
 
         private void AddEvent(MacroEvent e)
         {
-            e.TimeMs = recordClock.ElapsedMilliseconds;
+            e.TimeUs = RecordElapsedMicroseconds;
+            e.TimeMs = e.TimeUs.Value / 1000L;
             lock (eventsLock)
             {
                 if (recordedEvents.Count < MaxEvents) recordedEvents.Add(e);
@@ -1291,6 +1580,7 @@ namespace MacroDeck
 
         private void TogglePlayback()
         {
+            if (visualRecognitionPage != null && visualRecognitionPage.IsRunning) { visualRecognitionPage.StopExecution(); return; }
             if (recording) { UpdateRuntimeUi("Pare a gravação antes de reproduzir", "", true); return; }
             if (playing) { StopPlayback(); return; }
             if (pendingEvents != null && pendingEvents.Count > 0 && pendingPreviewActive)
@@ -1299,7 +1589,9 @@ namespace MacroDeck
                     Version = 1,
                     Name = String.IsNullOrWhiteSpace(nameBox.Text) ? Tr("Prévia") : nameBox.Text.Trim(),
                     CreatedAt = DateTime.Now,
-                    Events = new List<MacroEvent>(pendingEvents)
+                    Events = new List<MacroEvent>(pendingEvents),
+                    StartMouseX = recordingStartMouseX,
+                    StartMouseY = recordingStartMouseY
                 };
                 StartPlayback(preview);
                 return;
@@ -1318,41 +1610,86 @@ namespace MacroDeck
 
         private void StartPlayback(MacroFile macro)
         {
+            if (playing || recording || activatingMacro) return;
+            CommitPlaybackTiming();
             playing = true;
             playbackGeneration++;
             int generation = playbackGeneration;
             CancellationTokenSource source = new CancellationTokenSource();
             playbackCancel = source;
+            MacroPlaybackInput input = new MacroPlaybackInput(source.Token, PlayEvent, ReleasePlaybackInput);
             double intervalSeconds = (double)minutesInput.Value * 60.0 + (double)secondsInput.Value;
             bool repeat = infiniteCheck.Checked;
+            bool varyPlayback = variationCheck.Checked;
+            bool smoothReturn = smoothReturnCheck.Checked;
+            Rectangle[] screens = Array.ConvertAll(Screen.AllScreens, delegate(Screen screen) { return screen.Bounds; });
+            NativePoint macroMouseAnchor = new NativePoint();
+            bool hasMouseAnchor = TryGetFirstMousePosition(macro, out macroMouseAnchor);
+            bool resetCursorToMacroStart = !IsMacroDeckForeground && hasMouseAnchor;
             UiSounds.PlaybackStart();
             UpdateRuntimeUi("Reproduzindo", "", true);
 
-            ThreadPool.QueueUserWorkItem(delegate
+            Thread playbackThread = new Thread(delegate()
             {
                 string error = null;
+                IntPtr playbackTimer = IntPtr.Zero;
+                bool timerIsHighResolution = false;
+                bool timerResolutionRequested = false;
                 try
                 {
+                    playbackTimer = CreatePlaybackTimer(out timerIsHighResolution);
+                    if (playbackTimer == IntPtr.Zero || !timerIsHighResolution)
+                        timerResolutionRequested = timeBeginPeriod(1) == 0;
+
+                    WaitHandle cancellationWaitHandle = source.Token.WaitHandle;
+                    IntPtr cancelHandle = cancellationWaitHandle.SafeWaitHandle.DangerousGetHandle();
+                    IntPtr[] waitHandles = playbackTimer == IntPtr.Zero
+                        ? new IntPtr[] { cancelHandle }
+                        : new IntPtr[] { playbackTimer, cancelHandle };
+                    Random random = new Random(Guid.NewGuid().GetHashCode());
+
                     do
                     {
-                        Stopwatch cycleClock = Stopwatch.StartNew();
+                        PlaybackVariation variation = new PlaybackVariation(varyPlayback, random, screens);
+                        Point anchor = variation.Position(new Point(macroMouseAnchor.X, macroMouseAnchor.Y));
+                        if (smoothReturn && hasMouseAnchor)
+                        {
+                            if (!MoveCursorSmoothly(anchor, screens, random, input, source.Token, playbackTimer, waitHandles)) break;
+                        }
+                        else if (resetCursorToMacroStart)
+                            input.Send(new MacroEvent { Kind = "move", X = anchor.X, Y = anchor.Y });
+                        long cycleStartTimestamp = Stopwatch.GetTimestamp();
                         for (int i = 0; i < macro.Events.Count; i++)
                         {
                             if (source.IsCancellationRequested) break;
                             MacroEvent item = macro.Events[i];
                             if (item == null || item.Kind == "limit") continue;
-                            WaitUntil(cycleClock, item.TimeMs, source.Token);
-                            if (source.IsCancellationRequested) break;
-                            PlayEvent(item);
+                            long eventTime = variation.Time(GetEventTimeMicroseconds(item));
+                            if (!WaitForPlaybackTime(cycleStartTimestamp, eventTime, source.Token, playbackTimer, waitHandles)) break;
+                            input.Send(variation.Event(item));
+                        }
+                        if (smoothReturn && hasMouseAnchor && !source.IsCancellationRequested)
+                        {
+                            input.ReleaseHeld();
+                            if (!MoveCursorSmoothly(anchor, screens, random, input, source.Token, playbackTimer, waitHandles)) break;
                         }
                         if (!repeat || source.IsCancellationRequested) break;
-                        TimeSpan repeatPause = intervalSeconds > 0 ? TimeSpan.FromSeconds(intervalSeconds) : TimeSpan.FromMilliseconds(25);
-                        if (WaitCancelable(repeatPause, source.Token)) break;
+                        if (intervalSeconds > 0)
+                        {
+                            long intervalTicks = (long)(intervalSeconds * Stopwatch.Frequency);
+                            long intervalDeadline = Stopwatch.GetTimestamp() + intervalTicks;
+                            if (!WaitUntilTimestamp(intervalDeadline, source.Token, playbackTimer, waitHandles)) break;
+                        }
                     } while (!source.IsCancellationRequested);
                 }
+                catch (OperationCanceledException) { }
                 catch (Exception ex) { error = ex.Message; }
                 finally
                 {
+                    try { input.ReleaseHeld(); }
+                    catch (Exception ex) { if (error == null) error = ex.Message; }
+                    if (timerResolutionRequested) timeEndPeriod(1);
+                    if (playbackTimer != IntPtr.Zero) CloseHandle(playbackTimer);
                     if (IsDisposed || !IsHandleCreated) source.Dispose();
                     else
                     {
@@ -1365,31 +1702,122 @@ namespace MacroDeck
                                 UpdateRuntimeUi(error != null ? "Erro na reprodução" : (source.IsCancellationRequested ? "Reprodução parada" : "Macro finalizado"), "", false);
                             }
                             source.Dispose();
+                            if (closeAfterPlayback && !playing && !IsDisposed) Close();
                         })) source.Dispose();
                     }
                 }
             });
+            playbackThread.IsBackground = true;
+            playbackThread.Name = "MacroDeck playback";
+            try { playbackThread.Priority = ThreadPriority.AboveNormal; }
+            catch { }
+            playbackThread.Start();
         }
 
-        private static bool WaitCancelable(TimeSpan duration, CancellationToken token)
+        private static bool MoveCursorSmoothly(Point target, Rectangle[] screens, Random random, MacroPlaybackInput input,
+            CancellationToken cancellation, IntPtr timer, IntPtr[] waitHandles)
         {
-            Stopwatch sw = Stopwatch.StartNew();
-            while (sw.Elapsed < duration)
+            cancellation.ThrowIfCancellationRequested();
+            NativePoint current;
+            if (!GetCursorPos(out current)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            long started = Stopwatch.GetTimestamp();
+            return PlaybackMotion.Move(new Point(current.X, current.Y), target, screens, random,
+                delegate(long timeUs) { return WaitForPlaybackTime(started, timeUs, cancellation, timer, waitHandles); },
+                delegate(Point point) { input.Send(new MacroEvent { Kind = "move", X = point.X, Y = point.Y }); }, cancellation);
+        }
+
+        private static IntPtr CreatePlaybackTimer(out bool highResolution)
+        {
+            highResolution = false;
+            try
             {
-                if (token.IsCancellationRequested) return true;
-                int left = (int)Math.Min(100, Math.Max(1, (duration - sw.Elapsed).TotalMilliseconds));
-                Thread.Sleep(left);
+                IntPtr timer = CreateWaitableTimerEx(IntPtr.Zero, null, CreateWaitableTimerHighResolution, TimerModifyStateAndSynchronize);
+                if (timer != IntPtr.Zero)
+                {
+                    highResolution = true;
+                    return timer;
+                }
+
+                timer = CreateWaitableTimerEx(IntPtr.Zero, null, 0, TimerModifyStateAndSynchronize);
+                if (timer != IntPtr.Zero) return timer;
             }
-            return token.IsCancellationRequested;
+            catch (EntryPointNotFoundException) { }
+
+            return CreateWaitableTimer(IntPtr.Zero, false, null);
         }
 
-        private static void WaitUntil(Stopwatch clock, long targetMs, CancellationToken token)
+        private static bool TryGetFirstMousePosition(MacroFile macro, out NativePoint position)
         {
-            while (clock.ElapsedMilliseconds < targetMs)
+            position = new NativePoint();
+            if (macro == null || macro.Events == null) return false;
+            if (macro.StartMouseX.HasValue && macro.StartMouseY.HasValue)
             {
-                if (token.IsCancellationRequested) return;
-                long left = targetMs - clock.ElapsedMilliseconds;
-                Thread.Sleep((int)Math.Min(15, Math.Max(1, left)));
+                position.X = macro.StartMouseX.Value;
+                position.Y = macro.StartMouseY.Value;
+                return true;
+            }
+            for (int i = 0; i < macro.Events.Count; i++)
+            {
+                MacroEvent item = macro.Events[i];
+                if (item != null && (item.Kind == "move" || item.Kind == "wheel" || item.Kind == "mouseDown" || item.Kind == "mouseUp"))
+                {
+                    position.X = item.X;
+                    position.Y = item.Y;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static long GetEventTimeMicroseconds(MacroEvent item)
+        {
+            if (item.TimeUs.HasValue) return Math.Max(0L, item.TimeUs.Value);
+            long milliseconds = Math.Max(0L, item.TimeMs);
+            return milliseconds > Int64.MaxValue / 1000L ? Int64.MaxValue : milliseconds * 1000L;
+        }
+
+        private static bool WaitForPlaybackTime(long cycleStartTimestamp, long targetMicroseconds, CancellationToken token, IntPtr playbackTimer, IntPtr[] waitHandles)
+        {
+            double targetOffsetTicks = targetMicroseconds * (double)Stopwatch.Frequency / 1000000.0;
+            long offsetTicks = targetOffsetTicks >= Int64.MaxValue ? Int64.MaxValue : (long)Math.Round(targetOffsetTicks);
+            long deadline = cycleStartTimestamp > Int64.MaxValue - offsetTicks ? Int64.MaxValue : cycleStartTimestamp + offsetTicks;
+            return WaitUntilTimestamp(deadline, token, playbackTimer, waitHandles);
+        }
+
+        private static bool WaitUntilTimestamp(long deadline, CancellationToken token, IntPtr playbackTimer, IntPtr[] waitHandles)
+        {
+            long spinThresholdTicks = Math.Max(1L, Stopwatch.Frequency * TimerSpinThresholdUs / 1000000L);
+            while (true)
+            {
+                if (token.IsCancellationRequested) return false;
+                long remainingTicks = deadline - Stopwatch.GetTimestamp();
+                if (remainingTicks <= 0) return true;
+
+                if (remainingTicks <= spinThresholdTicks)
+                {
+                    Thread.SpinWait(64);
+                    continue;
+                }
+
+                if (playbackTimer == IntPtr.Zero)
+                {
+                    double remainingMilliseconds = remainingTicks * 1000.0 / Stopwatch.Frequency;
+                    int sleepMilliseconds = (int)Math.Min(10.0, Math.Max(1.0, Math.Floor(remainingMilliseconds - 1.0)));
+                    Thread.Sleep(sleepMilliseconds);
+                    continue;
+                }
+
+                long timerWaitTicks = remainingTicks - spinThresholdTicks;
+                long dueTime = -Math.Max(1L, (long)Math.Ceiling(timerWaitTicks * 10000000.0 / Stopwatch.Frequency));
+                if (!SetWaitableTimer(playbackTimer, ref dueTime, 0, IntPtr.Zero, IntPtr.Zero, false))
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "Não foi possível agendar o próximo passo do macro.");
+
+                uint waitResult = WaitForMultipleObjects((uint)waitHandles.Length, waitHandles, false, InfiniteWait);
+                if (waitResult == WaitObject0 + 1) return false;
+                if (waitResult == WaitFailed)
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "Não foi possível aguardar o próximo passo do macro.");
+                if (waitResult != WaitObject0)
+                    throw new InvalidOperationException("O temporizador de reprodução retornou um estado inesperado.");
             }
         }
 
@@ -1398,28 +1826,67 @@ namespace MacroDeck
             if (e.Kind == "keyDown" || e.Kind == "keyUp")
                 keybd_event((byte)e.Code, 0, e.Kind == "keyUp" ? 0x0002u : 0u, UIntPtr.Zero);
             else if (e.Kind == "move")
-                SetCursorPos(e.X, e.Y);
+                SendMousePlaybackInput(e.X, e.Y, 0, 0);
             else if (e.Kind == "wheel")
-            {
-                SetCursorPos(e.X, e.Y);
-                mouse_event(0x0800, 0, 0, unchecked((uint)e.Wheel), UIntPtr.Zero);
-            }
+                SendMousePlaybackInput(e.X, e.Y, MouseFlagWheel, unchecked((uint)e.Wheel));
             else if (e.Kind == "mouseDown" || e.Kind == "mouseUp")
             {
-                SetCursorPos(e.X, e.Y);
                 int button = Math.Max(0, Math.Min(MouseDownFlags.Length - 1, e.Code));
-                mouse_event(e.Kind == "mouseDown" ? MouseDownFlags[button] : MouseUpFlags[button], 0, 0, MouseData[button], UIntPtr.Zero);
+                uint buttonFlags = e.Kind == "mouseDown" ? MouseDownFlags[button] : MouseUpFlags[button];
+                SendMousePlaybackInput(e.X, e.Y, buttonFlags, MouseData[button]);
             }
+        }
+
+        private void ReleasePlaybackInput(MacroEvent item)
+        {
+            if (item.Kind == "keyUp")
+            {
+                keybd_event((byte)item.Code, 0, 0x0002u, UIntPtr.Zero);
+                return;
+            }
+            int button = Math.Max(0, Math.Min(MouseUpFlags.Length - 1, item.Code));
+            NativeInput[] inputs = new NativeInput[1];
+            inputs[0].Type = InputMouse;
+            inputs[0].Data.Mouse = new MouseInput { Flags = MouseUpFlags[button], Data = MouseData[button] };
+            // Release at the current cursor position; cleanup must not move it back.
+            if (SendInput(1, inputs, Marshal.SizeOf(typeof(NativeInput))) != 1)
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "O Windows não aceitou a ação do mouse durante a reprodução.");
+        }
+
+        private static void SendMousePlaybackInput(int x, int y, uint actionFlags, uint actionData)
+        {
+            MoveCursorTo(x, y);
+            if (actionFlags == 0) return;
+
+            NativeInput[] inputs = new NativeInput[1];
+            inputs[0].Type = InputMouse;
+            inputs[0].Data.Mouse = new MouseInput {
+                Data = actionData,
+                Flags = actionFlags,
+                ExtraInfo = IntPtr.Zero
+            };
+
+            if (SendInput(1, inputs, Marshal.SizeOf(typeof(NativeInput))) != 1)
+            {
+                int error = Marshal.GetLastWin32Error();
+                throw new System.ComponentModel.Win32Exception(error, "O Windows não aceitou a ação do mouse durante a reprodução.");
+            }
+        }
+
+        private static void MoveCursorTo(int x, int y)
+        {
+            if (SetCursorPos(x, y)) return;
+            int error = Marshal.GetLastWin32Error();
+            throw new System.ComponentModel.Win32Exception(error, "O Windows não conseguiu posicionar o cursor para a reprodução.");
         }
 
         private void StopPlayback()
         {
             if (!playing) return;
-            playing = false;
-            playbackGeneration++;
-            if (playbackCancel != null) { playbackCancel.Cancel(); playbackCancel = null; }
+            if (playbackCancel == null || playbackCancel.IsCancellationRequested) return;
+            playbackCancel.Cancel();
             UiSounds.PlaybackStop();
-            UpdateRuntimeUi("Reprodução parada", "", false);
+            UpdateRuntimeUi("Parando…", "", true);
         }
 
         private void UpdateRuntimeUi(string state, string detail, bool active)
@@ -1479,6 +1946,7 @@ namespace MacroDeck
                     }
                     if (String.IsNullOrWhiteSpace(folder)) return;
                     settings.Folder = folder;
+                    if (visualRecognitionPage != null) visualRecognitionPage.SetMacroFolder(folder);
                     folderBox.Text = settings.Folder;
                     SaveSettings();
                     LoadMacros();
@@ -1545,7 +2013,8 @@ namespace MacroDeck
                             Name = name,
                             CycleInfinite = macro.CycleInfinite ?? legacyCycleInfinite,
                             IntervalMinutes = macro.IntervalMinutes ?? legacyIntervalMinutes,
-                            IntervalSeconds = macro.IntervalSeconds ?? legacyIntervalSeconds
+                            IntervalSeconds = macro.IntervalSeconds ?? legacyIntervalSeconds,
+                            VaryPlayback = macro.VaryPlayback, SmoothCursorReturn = macro.SmoothCursorReturn
                         });
                     }
                 }
@@ -1682,6 +2151,8 @@ namespace MacroDeck
                 infiniteCheck.Checked = cycleInfinite;
                 minutesInput.Value = minutes;
                 secondsInput.Value = seconds;
+                variationCheck.Checked = choice.VaryPlayback ?? false;
+                smoothReturnCheck.Checked = choice.SmoothCursorReturn ?? false;
             }
             finally { applyingMacroSettings = false; }
 
@@ -1691,11 +2162,15 @@ namespace MacroDeck
             settings.IntervalSeconds = seconds;
             settings.Interval = minutes * 60 + seconds;
             settings.IntervalUnit = "segundos";
+            settings.VaryPlayback = variationCheck.Checked;
+            settings.SmoothCursorReturn = smoothReturnCheck.Checked;
             if (activeMacro != null)
             {
                 activeMacro.CycleInfinite = cycleInfinite;
                 activeMacro.IntervalMinutes = minutes;
                 activeMacro.IntervalSeconds = seconds;
+                activeMacro.VaryPlayback = variationCheck.Checked;
+                activeMacro.SmoothCursorReturn = smoothReturnCheck.Checked;
             }
             macroSettingsDirty = false;
         }
@@ -1717,6 +2192,8 @@ namespace MacroDeck
         private void UpdateMacroActions()
         {
             if (deleteSelectedButton == null) return;
+            if (variationCheck != null) variationCheck.Enabled = !recording && !playing && !activatingMacro;
+            if (smoothReturnCheck != null) smoothReturnCheck.Enabled = !recording && !playing && !activatingMacro;
             deleteSelectedButton.Enabled = !recording && !playing && !activatingMacro && macroCombo.SelectedItem != null;
             deleteAllButton.Enabled = !recording && !playing && !activatingMacro && macroCombo.Items.Count > 0;
             if (refreshButton != null) refreshButton.Enabled = !activatingMacro;
@@ -1806,8 +2283,25 @@ namespace MacroDeck
             return result.Length > 120 ? result.Substring(0, 120).TrimEnd().TrimEnd('.') : result;
         }
 
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            // Request cancellation on the first close attempt, before ChromeForm's
+            // fade. Actual disposal still waits for worker cleanup in OnClosing.
+            if (playing) StopPlayback();
+            if (visualRecognitionPage != null) visualRecognitionPage.StopExecution();
+            base.OnFormClosing(e);
+        }
+
         private void OnClosing(object sender, FormClosingEventArgs e)
         {
+            if (playing)
+            {
+                closeAfterPlayback = true;
+                e.Cancel = true;
+                StopPlayback();
+                return;
+            }
+            if (visualRecognitionPage != null) visualRecognitionPage.StopExecution();
             FinishThemeTransition();
             if (recording) StopRecording();
             pendingEvents = null;
@@ -1878,57 +2372,33 @@ namespace MacroDeck
             }
         }
 
-        private sealed class PageTransitionSurface : Control
+        private sealed class PageTransitionSurface : Form
         {
-            private readonly Bitmap outgoing;
-            private readonly Bitmap incoming;
-            private float progress;
-
+            private readonly Bitmap frame;
             public float Progress
             {
-                get { return progress; }
-                set { progress = Math.Max(0, Math.Min(1, value)); Invalidate(); }
+                set { Opacity = Math.Max(0.01, 1.0 - Math.Max(0, Math.Min(1,value))); }
             }
-
-            public PageTransitionSurface(Bitmap outgoingImage, Bitmap incomingImage, Color background)
+            public PageTransitionSurface(Bitmap outgoing)
             {
-                outgoing = outgoingImage;
-                incoming = incomingImage;
-                BackColor = background;
-                SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
-                    ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+                frame=outgoing;
+                FormBorderStyle=FormBorderStyle.None;
+                StartPosition=FormStartPosition.Manual;
+                ShowInTaskbar=false;
+                AutoScaleMode=AutoScaleMode.None;
+                DoubleBuffered=true;
+                Opacity=0.999;
             }
-
-            protected override void OnPaintBackground(PaintEventArgs e)
+            protected override bool ShowWithoutActivation { get { return true; } }
+            protected override CreateParams CreateParams
             {
-                e.Graphics.Clear(BackColor);
+                get { CreateParams parameters=base.CreateParams; parameters.ExStyle|=0x08000000|0x00000080|0x00000020; return parameters; }
             }
-
-            protected override void OnPaint(PaintEventArgs e)
-            {
-                base.OnPaint(e);
-                if (outgoing == null || incoming == null || ClientSize.Width < 1 || ClientSize.Height < 1) return;
-                Rectangle destination = ClientRectangle;
-                e.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBilinear;
-                e.Graphics.DrawImage(outgoing, destination);
-                if (progress <= 0) return;
-                using (ImageAttributes attributes = new ImageAttributes())
-                {
-                    ColorMatrix matrix = new ColorMatrix();
-                    matrix.Matrix33 = progress;
-                    attributes.SetColorMatrix(matrix, ColorMatrixFlag.Default, ColorAdjustType.Bitmap);
-                    e.Graphics.DrawImage(incoming, destination, 0, 0, incoming.Width, incoming.Height,
-                        GraphicsUnit.Pixel, attributes);
-                }
-            }
-
+            protected override void OnPaintBackground(PaintEventArgs e) { }
+            protected override void OnPaint(PaintEventArgs e) { e.Graphics.DrawImageUnscaled(frame,0,0); }
             protected override void Dispose(bool disposing)
             {
-                if (disposing)
-                {
-                    if (outgoing != null) outgoing.Dispose();
-                    if (incoming != null) incoming.Dispose();
-                }
+                if(disposing)frame.Dispose();
                 base.Dispose(disposing);
             }
         }

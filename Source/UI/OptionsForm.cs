@@ -15,6 +15,8 @@ namespace MacroDeck
         private readonly MacroSelector fontSelector;
         private readonly MacroSelector languageSelector;
         private readonly string uiLanguage;
+        private readonly CheckBox administratorCheck;
+        public bool AlwaysRunAsAdministrator { get { return administratorCheck.Checked; } }
 
         public string BackgroundHex { get; private set; }
         public string CardHex { get; private set; }
@@ -35,7 +37,7 @@ namespace MacroDeck
             Text = T("Opções") + " · MacroDeck";
             StartPosition = FormStartPosition.CenterParent;
             ShowInTaskbar = false; MaximizeBox = false; MinimizeBox = false;
-            ClientSize = new Size(560, 560); BackColor = palette.Background; ForeColor = palette.Text;
+            ClientSize = new Size(560, 602); BackColor = palette.Background; ForeColor = palette.Text;
             Font = FontManager.Create(9f, FontStyle.Regular);
             ApplyChromeTheme(palette.Background, palette.Text, palette.Card);
 
@@ -84,6 +86,8 @@ namespace MacroDeck
 
             Label languageHint = new Label { Text = T("A mudança de idioma será aplicada imediatamente."), AutoSize = true, Location = new Point(22, 417), ForeColor = palette.Muted, Tag = "muted" };
             ContentPanel.Controls.Add(languageHint);
+            administratorCheck = new CheckBox { Text = T("Sempre solicitar administrador ao abrir"), Checked = settings.AlwaysRunAsAdministrator, Location = new Point(24, 444), Size = new Size(512, 28), ForeColor = palette.Text };
+            ContentPanel.Controls.Add(administratorCheck);
             RoundedButton reset = new RoundedButton { Text = T("Restaurar cores padrão"), Location = new Point(24, 444), Size = new Size(190, 38), CornerRadius = 10, Tag = "secondary", Font = FontManager.Create(8.5f, FontStyle.Bold) };
             reset.Click += delegate
             {
@@ -108,6 +112,7 @@ namespace MacroDeck
                 CloseWithAnimation(DialogResult.OK);
             };
             ContentPanel.Controls.Add(reset); ContentPanel.Controls.Add(cancel); ContentPanel.Controls.Add(save);
+            reset.Top += 42; cancel.Top += 42; save.Top += 42;
             AcceptButton = save; CancelButton = cancel;
             ApplyTheme();
         }
@@ -116,6 +121,7 @@ namespace MacroDeck
 
         public void RefreshPalette(ThemePalette currentPalette)
         {
+            administratorCheck.Checked = settings.AlwaysRunAsAdministrator;
             palette = currentPalette;
             selected[0] = palette.Background; selected[1] = palette.Card;
             selected[2] = palette.Text; selected[3] = palette.Accent;
@@ -162,6 +168,7 @@ namespace MacroDeck
         private void ApplyTheme()
         {
             BackColor = palette.Background; ForeColor = palette.Text;
+            administratorCheck.ForeColor = palette.Text;
             ApplyChromeTheme(palette.Background, palette.Text, palette.Card);
             colorsCard.BackColor = palette.Card; colorsCard.BorderColor = palette.Border;
             if (fontSelector != null) fontSelector.ApplyTheme(palette);

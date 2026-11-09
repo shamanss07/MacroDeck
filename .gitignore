@@ -13,6 +13,7 @@ MacroDeck*.exe
 *.cache
 
 # Local user data and temporary files
+/.test-results/
 settings.json
 *.log
 *.tmp

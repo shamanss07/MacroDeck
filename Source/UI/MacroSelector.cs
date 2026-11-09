@@ -16,6 +16,8 @@ namespace MacroDeck
         private MacroDropdownPopup popup;
         private int updateDepth;
         public string Language { get; set; }
+        public string EmptyText { get; set; }
+        public string SelectionHint { get; set; }
 
         public List<MacroChoice> Items { get; private set; }
         public event EventHandler SelectedIndexChanged;
@@ -111,7 +113,7 @@ namespace MacroDeck
                 e.Graphics.DrawPath(pen, path);
             }
             MacroChoice choice = SelectedItem as MacroChoice;
-            string emptyText = Items.Count == 0 ? "Nenhum macro salvo" : "Selecione um macro";
+            string emptyText = Items.Count == 0 ? (EmptyText ?? "Nenhum macro salvo") : (SelectionHint ?? "Selecione um macro");
             string text = choice == null ? Localization.Translate(Language, emptyText) : choice.Name;
             Color textColor = choice == null ? colors.Muted : colors.Text;
             TextRenderer.DrawText(e.Graphics, text, Font, new Rectangle(12, 1, Math.Max(0, Width - 48), Height - 2), textColor, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
@@ -161,7 +163,7 @@ namespace MacroDeck
             BackColor = palette.Input;
             ForeColor = palette.Text;
             Font = FontManager.Create(8.5f, FontStyle.Regular);
-            Padding = new Padding(1);
+            Padding = new Padding(4);
             DoubleBuffered = true;
 
             viewer = new ModernScrollViewer { Dock = DockStyle.Fill, BackColor = palette.Input, Margin = Padding.Empty };

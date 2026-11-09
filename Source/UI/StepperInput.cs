@@ -36,6 +36,12 @@ namespace MacroDeck
             downButton.AccessibleName = Localization.Translate(language, "Diminuir valor");
         }
 
+        public void CommitValue()
+        {
+            int parsed;
+            Value = Int32.TryParse(valueBox.Text, out parsed) ? parsed : Value;
+        }
+
         public StepperInput()
         {
             Height = 34; Width = 104; BackColor = Color.FromArgb(41, 46, 56); ForeColor = Color.White;
@@ -45,11 +51,11 @@ namespace MacroDeck
             upButton = new StepperArrowButton(true) { BackColor = Color.FromArgb(57, 63, 74), ForeColor = Color.White, TabStop = false, AccessibleName = "Aumentar valor" };
             downButton = new StepperArrowButton(false) { BackColor = Color.FromArgb(57, 63, 74), ForeColor = Color.White, TabStop = false, AccessibleName = "Diminuir valor" };
             Controls.Add(valueBox); Controls.Add(upButton); Controls.Add(downButton);
-            upButton.StepRequested += delegate { Value = Value + 1; };
-            downButton.StepRequested += delegate { Value = Value - 1; };
+            upButton.StepRequested += delegate { CommitValue(); Value = Value + 1; };
+            downButton.StepRequested += delegate { CommitValue(); Value = Value - 1; };
             valueBox.KeyPress += delegate(object sender, KeyPressEventArgs e) { if (!Char.IsControl(e.KeyChar) && !Char.IsDigit(e.KeyChar)) e.Handled = true; };
-            valueBox.Validated += delegate { int parsed; Value = Int32.TryParse(valueBox.Text, out parsed) ? parsed : Value; };
-            valueBox.KeyDown += delegate(object sender, KeyEventArgs e) { if (e.KeyCode == Keys.Up) { Value++; e.Handled = true; } else if (e.KeyCode == Keys.Down) { Value--; e.Handled = true; } else if (e.KeyCode == Keys.Enter) { int parsed; Value = Int32.TryParse(valueBox.Text, out parsed) ? parsed : Value; e.Handled = true; } };
+            valueBox.Validated += delegate { CommitValue(); };
+            valueBox.KeyDown += delegate(object sender, KeyEventArgs e) { if (e.KeyCode == Keys.Up) { CommitValue(); Value++; e.Handled = true; } else if (e.KeyCode == Keys.Down) { CommitValue(); Value--; e.Handled = true; } else if (e.KeyCode == Keys.Enter) { CommitValue(); e.SuppressKeyPress = true; } };
             Resize += delegate { PositionChildren(); };
             PositionChildren();
         }

@@ -15,6 +15,8 @@ Developed by [shamanss07](https://github.com/shamanss07), with implementation an
 - Record and play back keyboard and mouse actions.
 - Preview a recording before saving it, and organize macros as JSON files.
 - Configure global shortcuts, repetition, and the delay between cycles.
+- Build Reader workflows that locate and click text or images on screen.
+- Minimize to the Windows notification area and keep using global shortcuts.
 - Use light and dark themes, customize colors, and select installed fonts.
 - Keep preferences between sessions.
 - Choose Portuguese (Brazil) or English for the app interface in **Menu → Settings**; changes apply immediately. On first launch, MacroDeck uses the Windows UI language when it is English and otherwise defaults to Portuguese (Brazil).
@@ -26,7 +28,7 @@ The initial release supports **Windows only**. MacroDeck is built with C# and Wi
 
 ## Install and use
 
-Download `MacroDeck-1.1.4.exe` from the GitHub **Releases** page and run it on Windows. If .NET Framework 4.8 is not installed, Windows may ask you to install it.
+Download `MacroDeck-1.1.5.exe` from the GitHub **Releases** page and run it on Windows. If .NET Framework 4.8 is not installed, Windows may ask you to install it.
 
 1. Choose the folder where you want to store macros.
 2. Enter a name and click **Record**. The default shortcut is F9.
@@ -45,7 +47,7 @@ Macros are JSON files in the selected folder. Preferences are stored in `%APPDAT
 3. Run:
 
    ```powershell
-   .\build.ps1 -OutputName MacroDeck-1.1.4.exe
+   .\build.ps1 -OutputName MacroDeck-1.1.5.exe
    ```
 
 The executable is created in the project root. You can also open `Source/MacroDeck.csproj` in Visual Studio. The OFL license in `Source/Assets/Fonts/OFL.txt` covers the included Montserrat font, not MacroDeck's code.

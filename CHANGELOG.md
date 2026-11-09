@@ -4,6 +4,20 @@
 
 Only public releases are listed here. Unreleased development changes do not receive a public version entry.
 
+## 1.1.5 — Screen Reader and playback improvements
+
+- Add the Reader tab to build, reorder, save, and reopen workflows that find text with Windows OCR or match a reference image on screen. Saved workflows retain their reference images.
+- Import a reference image from a file, capture it on screen, or paste it from the clipboard. Choose a default full monitor or a custom search area for each step, with a search timeout and a delay after each action.
+- Test a step by moving the cursor to its match without clicking. During a workflow, check that the target is stable and unique before clicking, and stop when Esc is pressed or the target window or display layout changes.
+- Route the global Play/Stop shortcut to the active tab and let it stop a running macro or Reader workflow after switching tabs. Improve tab transitions, Reader card layout, and dropdown borders.
+- Improve macro recording and playback precision with finer timing, more frequent mouse sampling, and a recorded cursor starting point. Replay mouse actions at their recorded coordinates and keep older macro files compatible.
+- Add per-macro options for small variations in playback timing and mouse position, and for smooth cursor movement to the starting point before and after a completed cycle. Both options start off.
+- Release held keys and mouse buttons when macro playback stops, and wait for cleanup before starting another operation or closing the app.
+- Apply typed repeat values before playback and saving, preserve unsaved input when switching languages, and write macro settings and app preferences without leaving partially written files.
+- Minimize to the Windows notification area, where the tray icon can restore or close MacroDeck while global shortcuts remain available.
+- Warn when MacroDeck opens without administrator privileges. Offer to restart with administrator privileges or remember to request them on future launches. Windows still asks for approval when required.
+- Fix the local build script to ignore generated source files from previous Visual Studio builds.
+
 ## 1.1.4 — macro save and playback settings fixes
 
 - Save playback settings to the active macro only, without changing settings in other saved macros.

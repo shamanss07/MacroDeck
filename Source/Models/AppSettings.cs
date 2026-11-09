@@ -31,6 +31,10 @@ namespace MacroDeck
         public decimal Interval { get; set; }
         public string IntervalUnit { get; set; }
         public string SelectedFile { get; set; }
+        public string ReaderMonitorDevice { get; set; }
+        public bool VaryPlayback { get; set; }
+        public bool SmoothCursorReturn { get; set; }
+        public bool AlwaysRunAsAdministrator { get; set; }
 
         public static AppSettings Defaults()
         {

@@ -23,6 +23,7 @@ namespace MacroDeck
         private const int WmXButtonUp = 0x020C;
         private const uint LlkhfInjected = 0x10;
         private const uint LlmhfInjected = 0x01;
+        private const long MouseMoveSampleIntervalMicroseconds = 4000;
         private readonly MainForm owner;
         private readonly HookProc keyboardProc;
         private readonly HookProc mouseProc;
@@ -34,7 +35,7 @@ namespace MacroDeck
         private readonly bool[] ignoredMouseUp = new bool[5];
         private int lastMouseX = Int32.MinValue;
         private int lastMouseY = Int32.MinValue;
-        private long lastMouseMs = -1000;
+        private long lastMouseMicroseconds = -1000000;
 
         [StructLayout(LayoutKind.Sequential)] private struct KbdLl { public uint VkCode; public uint ScanCode; public uint Flags; public uint Time; public IntPtr ExtraInfo; }
         [StructLayout(LayoutKind.Sequential)] private struct Point { public int X; public int Y; }
@@ -61,7 +62,7 @@ namespace MacroDeck
             }
         }
 
-        public void ResetMouseTracking() { lastMouseX = Int32.MinValue; lastMouseY = Int32.MinValue; lastMouseMs = -1000; }
+        public void ResetMouseTracking() { lastMouseX = Int32.MinValue; lastMouseY = Int32.MinValue; lastMouseMicroseconds = -1000000; }
 
         public void BeginMouseCapture()
         {
@@ -106,6 +107,11 @@ namespace MacroDeck
                     {
                         swallowed[vk] = true;
                         return new IntPtr(1);
+                    }
+                    if (owner.IsNativePlaybackHotkey(vk, CurrentCtrl(), CurrentAlt(), CurrentShift(), CurrentWin()))
+                    {
+                        ignoredKeyUp[vk] = true;
+                        return CallNextHookEx(keyboardHook, code, wParam, lParam);
                     }
                     if (!repeatedKeyDown && owner.TryHotkey(vk, CurrentCtrl(), CurrentAlt(), CurrentShift(), CurrentWin()))
                     {
@@ -152,14 +158,14 @@ namespace MacroDeck
                 ignoredMouseUp[buttonIndex] = false;
                 return CallNextHookEx(mouseHook, code, wParam, lParam);
             }
-            long now = owner.RecordElapsedMs;
+            long now = owner.RecordElapsedMicroseconds;
             if (message == WmMouseMove)
             {
                 int dx = data.Pt.X - lastMouseX, dy = data.Pt.Y - lastMouseY;
-                if (lastMouseX == Int32.MinValue || (now - lastMouseMs >= 15 && (dx != 0 || dy != 0)))
+                if (lastMouseX == Int32.MinValue || (now - lastMouseMicroseconds >= MouseMoveSampleIntervalMicroseconds && (dx != 0 || dy != 0)))
                 {
                     if (!owner.IsRecording || !owner.IsMacroDeckForeground) owner.RecordMouseMove(data.Pt.X, data.Pt.Y);
-                    lastMouseX = data.Pt.X; lastMouseY = data.Pt.Y; lastMouseMs = now;
+                    lastMouseX = data.Pt.X; lastMouseY = data.Pt.Y; lastMouseMicroseconds = now;
                 }
             }
             else if (message == WmLButtonDown) owner.RecordMouseButton("mouseDown", 0, data.Pt.X, data.Pt.Y);

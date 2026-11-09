@@ -11,6 +11,7 @@ namespace MacroDeck
         public int Y { get; set; }
         public int Wheel { get; set; }
         public long TimeMs { get; set; }
+        public long? TimeUs { get; set; }
     }
     public sealed class MacroFile
     {
@@ -21,5 +22,9 @@ namespace MacroDeck
         public bool? CycleInfinite { get; set; }
         public int? IntervalMinutes { get; set; }
         public int? IntervalSeconds { get; set; }
+        public int? StartMouseX { get; set; }
+        public int? StartMouseY { get; set; }
+        public bool? VaryPlayback { get; set; }
+        public bool? SmoothCursorReturn { get; set; }
     }
 }

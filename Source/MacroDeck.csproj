@@ -25,9 +25,13 @@
     <Compile Include="Models\AppSettings.cs" />
     <Compile Include="Models\Macro.cs" />
     <Compile Include="Models\MacroChoice.cs" />
+    <Compile Include="Models\VisualWorkflow.cs" />
     <Compile Include="Input\Hotkey.cs" />
     <Compile Include="Input\NativeHooks.cs" />
     <Compile Include="UI\MainForm.cs" />
+    <Compile Include="UI\AdministratorPrompt.cs" />
+    <Compile Include="Services\Administration.cs" />
+    <Compile Include="UI\TrayIconController.cs" />
     <Compile Include="UI\ChromeForm.cs" />
     <Compile Include="UI\ThemePalette.cs" />
     <Compile Include="UI\RoundedControls.cs" />
@@ -42,6 +46,13 @@
     <Compile Include="UI\OptionsForm.cs" />
     <Compile Include="UI\Localization.cs" />
     <Compile Include="Services\WindowsFolderPicker.cs" />
+    <Compile Include="Services\ScreenRegionSelector.cs" />
+    <Compile Include="Services\ClipboardImageImport.cs" />
+    <Compile Include="Services\VisualRecognitionService.cs" />
+    <Compile Include="Services\ReaderExecution.cs" />
+    <Compile Include="Services\MacroPlaybackInput.cs" />
+    <Compile Include="Services\PlaybackMotion.cs" />
+    <Compile Include="UI\VisualRecognitionPage.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.manifest" />

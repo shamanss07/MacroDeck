@@ -9,6 +9,8 @@ namespace MacroDeck
         public bool? CycleInfinite;
         public int? IntervalMinutes;
         public int? IntervalSeconds;
+        public bool? VaryPlayback;
+        public bool? SmoothCursorReturn;
 
         public bool HasPlaybackSettings
         {
