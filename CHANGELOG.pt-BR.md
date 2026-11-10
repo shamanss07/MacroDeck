@@ -16,6 +16,7 @@ As entradas abaixo registram somente versões públicas. Alterações de desenvo
 - Aplica os valores digitados de repetição antes de reproduzir ou salvar, preserva alterações pendentes ao trocar de idioma e salva as opções dos macros e as preferências do aplicativo sem deixar arquivos gravados pela metade.
 - Minimiza para a área de notificação do Windows, de onde o aplicativo pode ser restaurado ou fechado. Os atalhos globais continuam disponíveis.
 - Avisa ao abrir sem privilégios de administrador. Permite reiniciar como administrador ou lembrar de solicitar essa permissão nas próximas aberturas. O Windows ainda pede aprovação quando necessário.
+- Exibe a versão do próprio executável na tela Sobre, em inglês e português do Brasil.
 - Corrige o script de compilação local para ignorar arquivos gerados por compilações anteriores no Visual Studio.
 
 ## 1.1.4 — correções ao salvar macros e opções de reprodução

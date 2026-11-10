@@ -16,6 +16,7 @@ Only public releases are listed here. Unreleased development changes do not rece
 - Apply typed repeat values before playback and saving, preserve unsaved input when switching languages, and write macro settings and app preferences without leaving partially written files.
 - Minimize to the Windows notification area, where the tray icon can restore or close MacroDeck while global shortcuts remain available.
 - Warn when MacroDeck opens without administrator privileges. Offer to restart with administrator privileges or remember to request them on future launches. Windows still asks for approval when required.
+- Show the executable's version in the About dialog in English and Brazilian Portuguese.
 - Fix the local build script to ignore generated source files from previous Visual Studio builds.
 
 ## 1.1.4 — macro save and playback settings fixes
