@@ -4,6 +4,16 @@
 
 As entradas abaixo registram somente versões públicas. Alterações de desenvolvimento ainda não lançadas não recebem uma versão pública.
 
+## 1.2.0 — Variações na reprodução e pausas entre ciclos
+
+- Define em pixels o deslocamento máximo do mouse em cada eixo. Com 0 px, o MacroDeck usa as coordenadas gravadas.
+- Adiciona atrasos aleatórios opcionais entre ações sem prolongar o tempo de teclas ou botões pressionados.
+- Permite variar a quantidade de cliques repetidos por uma porcentagem configurável. A porcentagem fica salva ao desligar a opção. Cliques isolados e arrastes são preservados.
+- Permite somar um atraso aleatório à espera configurada entre ciclos.
+- Adiciona pausas mais longas entre ciclos, com chance de 1% a 100%, duração de 1 a 60 minutos e um mínimo de ciclos completos antes de outra pausa. A reprodução retoma automaticamente e pode ser interrompida durante a espera.
+- Melhora o retorno suave do cursor com mudanças graduais de velocidade e pequenos ajustes laterais ao longo do trajeto.
+- Salva as opções de reprodução por macro e permite abrir arquivos de macros antigos.
+
 ## 1.1.5 — Leitor de tela e melhorias na reprodução
 
 - Adiciona a aba Leitor para montar, reordenar, salvar e reabrir fluxos que localizam textos pelo reconhecimento do Windows ou comparam uma imagem de referência com a tela. Os fluxos salvos preservam as imagens de referência.

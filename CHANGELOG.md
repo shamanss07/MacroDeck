@@ -4,6 +4,16 @@
 
 Only public releases are listed here. Unreleased development changes do not receive a public version entry.
 
+## 1.2.0 — Playback variation and cycle pauses
+
+- Set the maximum mouse offset in pixels on each axis. A value of 0 px keeps the recorded coordinates.
+- Add optional random delays between individual actions without extending held keys or mouse buttons.
+- Vary the number of repeated clicks by a configurable percentage. The toggle keeps the saved percentage when turned off. Isolated clicks and drags are preserved.
+- Add an optional random delay to the configured wait between cycles.
+- Add longer pauses between cycles with a configurable chance from 1% to 100%, a duration of 1 to 60 minutes, and a minimum number of completed cycles before another pause is possible. Playback resumes automatically and can be stopped during the pause.
+- Improve smooth cursor return with gradual speed changes and small lateral adjustments along the path.
+- Save the playback options per macro, with support for opening older macro files.
+
 ## 1.1.5 — Screen Reader and playback improvements
 
 - Add the Reader tab to build, reorder, save, and reopen workflows that find text with Windows OCR or match a reference image on screen. Saved workflows retain their reference images.

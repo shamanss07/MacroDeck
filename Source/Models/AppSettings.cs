@@ -33,6 +33,18 @@ namespace MacroDeck
         public string SelectedFile { get; set; }
         public string ReaderMonitorDevice { get; set; }
         public bool VaryPlayback { get; set; }
+        public int VariationPixels { get; set; }
+        public bool VaryActionTiming { get; set; }
+        public int ActionVariationSeconds { get; set; }
+        public bool VaryCyclePause { get; set; }
+        public int CycleVariationSeconds { get; set; }
+        public bool PauseBetweenCycles { get; set; }
+        public int? CyclePauseChancePercent { get; set; }
+        public int? CyclePauseDenominator { get; set; }
+        public int? CyclePauseMinutes { get; set; }
+        public int? CyclePauseMinimumCycles { get; set; }
+        public int ClickVariationPercent { get; set; }
+        public bool? VaryClickCount { get; set; }
         public bool SmoothCursorReturn { get; set; }
         public bool AlwaysRunAsAdministrator { get; set; }
 

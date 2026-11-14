@@ -23,11 +23,20 @@ namespace MacroDeck
             set { suffix = value ?? ""; PositionChildren(); Invalidate(); }
         }
         public int Minimum { get { return minimum; } set { minimum = value; if (this.value < minimum) Value = minimum; } }
+        public int Increment { get; set; }
         public int Maximum { get { return maximum; } set { maximum = value; if (this.value > maximum) Value = maximum; } }
         public int Value
         {
             get { return value; }
-            set { int next = Math.Max(minimum, Math.Min(maximum, value)); if (this.value == next) { valueBox.Text = next.ToString(); return; } this.value = next; valueBox.Text = next.ToString(); EventHandler changed = ValueChanged; if (changed != null) changed(this, EventArgs.Empty); }
+            set
+            {
+                int next = Math.Max(minimum, Math.Min(maximum, value));
+                bool changed = this.value != next;
+                this.value = next;
+                string text = next.ToString();
+                if (valueBox.Text != text) valueBox.Text = text;
+                if (changed && ValueChanged != null) ValueChanged(this, EventArgs.Empty);
+            }
         }
 
         public void ApplyLanguage(string language)
@@ -51,11 +60,12 @@ namespace MacroDeck
             upButton = new StepperArrowButton(true) { BackColor = Color.FromArgb(57, 63, 74), ForeColor = Color.White, TabStop = false, AccessibleName = "Aumentar valor" };
             downButton = new StepperArrowButton(false) { BackColor = Color.FromArgb(57, 63, 74), ForeColor = Color.White, TabStop = false, AccessibleName = "Diminuir valor" };
             Controls.Add(valueBox); Controls.Add(upButton); Controls.Add(downButton);
-            upButton.StepRequested += delegate { CommitValue(); Value = Value + 1; };
-            downButton.StepRequested += delegate { CommitValue(); Value = Value - 1; };
+            Increment = 1;
+            upButton.StepRequested += delegate { CommitValue(); Value = Value + Increment; };
+            downButton.StepRequested += delegate { CommitValue(); Value = Value - Increment; };
             valueBox.KeyPress += delegate(object sender, KeyPressEventArgs e) { if (!Char.IsControl(e.KeyChar) && !Char.IsDigit(e.KeyChar)) e.Handled = true; };
             valueBox.Validated += delegate { CommitValue(); };
-            valueBox.KeyDown += delegate(object sender, KeyEventArgs e) { if (e.KeyCode == Keys.Up) { CommitValue(); Value++; e.Handled = true; } else if (e.KeyCode == Keys.Down) { CommitValue(); Value--; e.Handled = true; } else if (e.KeyCode == Keys.Enter) { CommitValue(); e.SuppressKeyPress = true; } };
+            valueBox.KeyDown += delegate(object sender, KeyEventArgs e) { if (e.KeyCode == Keys.Up) { CommitValue(); Value += Increment; e.Handled = true; } else if (e.KeyCode == Keys.Down) { CommitValue(); Value -= Increment; e.Handled = true; } else if (e.KeyCode == Keys.Enter) { CommitValue(); e.SuppressKeyPress = true; } };
             Resize += delegate { PositionChildren(); };
             PositionChildren();
         }

@@ -159,8 +159,11 @@ namespace MacroDeck
         private ModernTextBox nameBox, folderBox;
         private MacroSelector macroCombo;
         private AnimatedToggle infiniteCheck;
-        private AnimatedToggle variationCheck, smoothReturnCheck;
-        private StepperInput minutesInput, secondsInput;
+        private AnimatedToggle variationCheck, actionVariationCheck, clickVariationCheck, smoothReturnCheck, cycleVariationCheck;
+        private StepperInput minutesInput, secondsInput, variationInput, actionVariationInput, clickVariationInput, cycleVariationInput;
+        private AnimatedToggle cyclePauseCheck;
+        private StepperInput cyclePauseChanceInput, cyclePauseMinutesInput, cyclePauseMinimumInput;
+        private const int MaximumVariationSeconds = 60;
         private Panel headerPanel, autoClickerPage;
         private BufferedPanel pageHost;
         private ModernScrollViewer macroPage;
@@ -295,6 +298,17 @@ namespace MacroDeck
                 s.SelectedFile = loaded.SelectedFile ?? "";
                 s.ReaderMonitorDevice = loaded.ReaderMonitorDevice ?? "";
                 s.VaryPlayback = loaded.VaryPlayback;
+                s.VariationPixels = loaded.VariationPixels;
+                s.VaryActionTiming = loaded.VaryActionTiming;
+                s.ActionVariationSeconds = loaded.ActionVariationSeconds;
+                s.VaryCyclePause = loaded.VaryCyclePause;
+                s.CycleVariationSeconds = loaded.CycleVariationSeconds;
+                s.PauseBetweenCycles = loaded.PauseBetweenCycles;
+                s.CyclePauseChancePercent = CyclePauseSchedule.ReadChancePercent(loaded.CyclePauseChancePercent, loaded.CyclePauseDenominator);
+                s.CyclePauseMinutes = loaded.CyclePauseMinutes;
+                s.CyclePauseMinimumCycles = loaded.CyclePauseMinimumCycles;
+                s.ClickVariationPercent = loaded.ClickVariationPercent;
+                s.VaryClickCount = loaded.VaryClickCount ?? (loaded.ClickVariationPercent > 0);
                 s.SmoothCursorReturn = loaded.SmoothCursorReturn;
                 s.AlwaysRunAsAdministrator = loaded.AlwaysRunAsAdministrator;
             }
@@ -391,7 +405,7 @@ namespace MacroDeck
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 158));
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 258));
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 174));
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 132));
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 306));
             grid.SuspendLayout();
             macroPage.Content = grid;
 
@@ -549,32 +563,112 @@ namespace MacroDeck
             RoundedPanel playbackOptions = CreateCard();
             playbackOptions.Dock = DockStyle.Fill;
             AddSectionTitle(playbackOptions, Tr("OPÇÕES DE REPRODUÇÃO"), 19, 14);
-            variationCheck = new AnimatedToggle { Text = Tr("Variação leve"), Location = new Point(20, 44), Size = new Size(300, 30), Font = FontManager.Create(8.5f, FontStyle.Bold) };
+            variationCheck = new AnimatedToggle { Text = Tr("Variação do mouse"), Location = new Point(20, 44), Size = new Size(300, 30), Font = FontManager.Create(8.5f, FontStyle.Bold) };
+            actionVariationCheck = new AnimatedToggle { Text = Tr("Variação de ações"), Location = new Point(20, 110), Size = new Size(300, 30), Font = FontManager.Create(8.5f, FontStyle.Bold) };
+            clickVariationCheck = new AnimatedToggle { Text = Tr("Variação de cliques"), Location = new Point(20, 176), Size = new Size(300, 30), Font = FontManager.Create(8.5f, FontStyle.Bold) };
             smoothReturnCheck = new AnimatedToggle { Text = Tr("Retorno suave ao início"), Location = new Point(400, 44), Size = new Size(300, 30), Font = FontManager.Create(8.5f, FontStyle.Bold) };
+            cycleVariationCheck = new AnimatedToggle { Text = Tr("Variação de ciclo"), Location = new Point(400, 110), Size = new Size(185, 30), Font = FontManager.Create(8.5f, FontStyle.Bold) };
             variationCheck.SetInitialChecked(settings.VaryPlayback);
+            actionVariationCheck.SetInitialChecked(settings.VaryActionTiming);
+            clickVariationCheck.SetInitialChecked(settings.VaryClickCount ?? false);
             smoothReturnCheck.SetInitialChecked(settings.SmoothCursorReturn);
-            Label variationHint = MakeCaption(Tr("Até 1 px; pequenos ajustes nos tempos."), 20, 81);
+            cycleVariationCheck.SetInitialChecked(settings.VaryCyclePause);
+            variationInput = new StepperInput { Location = new Point(240, 42), Suffix = "px", Value = settings.VariationPixels, AccessibleName = Tr("Deslocamento máximo do mouse") };
+            actionVariationInput = new StepperInput { Location = new Point(240, 108), Maximum = MaximumVariationSeconds, Suffix = "s", Value = settings.ActionVariationSeconds, AccessibleName = Tr("Atraso máximo entre ações") };
+            clickVariationInput = new StepperInput { Location = new Point(240, 174), Maximum = 100, Increment = 10, Suffix = "%", Value = settings.ClickVariationPercent, AccessibleName = Tr("Variação de cliques") };
+            cycleVariationInput = new StepperInput { Location = new Point(585, 108), Maximum = MaximumVariationSeconds, Suffix = "s", Value = settings.CycleVariationSeconds, AccessibleName = Tr("Atraso máximo entre ciclos") };
+            cycleVariationInput.ApplyLanguage(uiLanguage);
+            cyclePauseCheck = new AnimatedToggle { Text = Tr("Pausa entre ciclos"), Location = new Point(400, 176), Size = new Size(275, 30), Font = FontManager.Create(8.5f, FontStyle.Bold) };
+            cyclePauseCheck.SetInitialChecked(settings.PauseBetweenCycles);
+            Label cyclePauseChanceLabel = MakeCaption(Tr("Chance"), 400, 218);
+            Label cyclePauseMinutesLabel = MakeCaption(Tr("Duração"), 512, 218);
+            Label cyclePauseMinimumLabel = MakeCaption(Tr("Mín. de ciclos"), 624, 218);
+            cyclePauseChanceInput = new StepperInput { Location = new Point(400, 241), Suffix = "%", Minimum = 1, Maximum = 100, Value = settings.CyclePauseChancePercent ?? CyclePauseSchedule.DefaultChancePercent, AccessibleName = Tr("Chance por ciclo elegível") };
+            cyclePauseMinutesInput = new StepperInput { Location = new Point(512, 241), Suffix = "min", Minimum = 1, Maximum = 60, Value = settings.CyclePauseMinutes ?? CyclePauseSchedule.DefaultMinutes, AccessibleName = cyclePauseMinutesLabel.Text };
+            cyclePauseMinimumInput = new StepperInput { Location = new Point(624, 241), Minimum = 1, Value = settings.CyclePauseMinimumCycles ?? CyclePauseSchedule.DefaultMinimumCycles, AccessibleName = cyclePauseMinimumLabel.Text };
+            foreach (StepperInput input in new[] { cyclePauseChanceInput, cyclePauseMinutesInput, cyclePauseMinimumInput })
+                input.ApplyLanguage(uiLanguage);
+            clickVariationInput.ApplyLanguage(uiLanguage);
+            Label clickVariationHint = MakeCaption(Tr("Ajusta a quantidade de cliques repetidos."), 20, 213);
+            clickVariationHint.Tag = "muted";
+            clickVariationHint.AutoSize = false;
+            clickVariationHint.Height = 26;
+            variationInput.ApplyLanguage(uiLanguage);
+            actionVariationInput.ApplyLanguage(uiLanguage);
+            Label variationHint = MakeCaption(Tr("Limite de deslocamento do mouse por eixo."), 20, 81);
+            Label actionVariationHint = MakeCaption(Tr("Atraso aleatório entre ações."), 20, 147);
             Label smoothHint = MakeCaption(Tr("Antes e depois de cada ciclo concluído."), 400, 81);
-            variationHint.Tag = smoothHint.Tag = "muted";
-            variationHint.AutoSize = smoothHint.AutoSize = false;
-            variationHint.Height = smoothHint.Height = 26;
+            Label cycleVariationHint = MakeCaption(Tr("Soma um atraso aleatório à pausa entre ciclos."), 400, 147);
+            variationHint.Tag = actionVariationHint.Tag = smoothHint.Tag = cycleVariationHint.Tag = "muted";
+            variationHint.AutoSize = actionVariationHint.AutoSize = smoothHint.AutoSize = cycleVariationHint.AutoSize = false;
+            variationHint.Height = actionVariationHint.Height = smoothHint.Height = cycleVariationHint.Height = 26;
             EventHandler optionsChanged = delegate {
                 if (applyingMacroSettings) return;
                 settings.VaryPlayback = variationCheck.Checked;
+                settings.VariationPixels = variationInput.Value;
+                settings.VaryActionTiming = actionVariationCheck.Checked;
+                settings.ActionVariationSeconds = actionVariationInput.Value;
+                settings.ClickVariationPercent = clickVariationInput.Value;
+                settings.VaryClickCount = clickVariationCheck.Checked;
                 settings.SmoothCursorReturn = smoothReturnCheck.Checked;
+                settings.VaryCyclePause = cycleVariationCheck.Checked;
+                settings.CycleVariationSeconds = cycleVariationInput.Value;
+                settings.PauseBetweenCycles = cyclePauseCheck.Checked;
+                settings.CyclePauseChancePercent = cyclePauseChanceInput.Value;
+                settings.CyclePauseMinutes = cyclePauseMinutesInput.Value;
+                settings.CyclePauseMinimumCycles = cyclePauseMinimumInput.Value;
                 macroSettingsDirty = true;
                 SaveSettings(); UpdateMacroActions();
             };
             variationCheck.CheckedChanged += optionsChanged;
+            actionVariationCheck.CheckedChanged += optionsChanged;
+            clickVariationCheck.CheckedChanged += optionsChanged;
             smoothReturnCheck.CheckedChanged += optionsChanged;
+            cycleVariationCheck.CheckedChanged += optionsChanged;
+            cyclePauseCheck.CheckedChanged += optionsChanged;
+            variationInput.ValueChanged += optionsChanged;
+            actionVariationInput.ValueChanged += optionsChanged;
+            clickVariationInput.ValueChanged += optionsChanged;
+            cycleVariationInput.ValueChanged += optionsChanged;
+            cyclePauseChanceInput.ValueChanged += optionsChanged;
+            cyclePauseMinutesInput.ValueChanged += optionsChanged;
+            cyclePauseMinimumInput.ValueChanged += optionsChanged;
+            playbackOptions.Controls.AddRange(new Control[] {
+                cyclePauseCheck, cyclePauseChanceLabel, cyclePauseMinutesLabel, cyclePauseMinimumLabel,
+                cyclePauseChanceInput, cyclePauseMinutesInput, cyclePauseMinimumInput
+            });
+            playbackOptions.Controls.Add(cycleVariationCheck);
+            playbackOptions.Controls.Add(cycleVariationInput);
+            playbackOptions.Controls.Add(cycleVariationHint);
+            playbackOptions.Controls.Add(clickVariationInput);
+            playbackOptions.Controls.Add(clickVariationCheck);
+            playbackOptions.Controls.Add(clickVariationHint);
             playbackOptions.Controls.Add(variationCheck); playbackOptions.Controls.Add(smoothReturnCheck);
-            playbackOptions.Controls.Add(variationHint); playbackOptions.Controls.Add(smoothHint);
+            playbackOptions.Controls.Add(actionVariationCheck);
+            playbackOptions.Controls.Add(variationInput); playbackOptions.Controls.Add(actionVariationInput);
+            playbackOptions.Controls.Add(variationHint); playbackOptions.Controls.Add(actionVariationHint); playbackOptions.Controls.Add(smoothHint);
             playbackOptions.Resize += delegate {
                 int margin = (int)Math.Round(20 * DeviceDpi / 96.0);
                 int half = playbackOptions.ClientSize.Width / 2;
-                variationCheck.Width = variationHint.Width = Math.Max(1, half - margin * 2);
+                variationHint.Width = actionVariationHint.Width = Math.Max(1, half - margin * 2);
+                variationInput.Left = actionVariationInput.Left = half - margin - variationInput.Width;
+                clickVariationInput.Left = variationInput.Left;
+                clickVariationHint.Width = variationHint.Width;
+                variationCheck.Width = actionVariationCheck.Width = clickVariationCheck.Width = Math.Max(1, variationInput.Left - variationCheck.Left - margin / 2);
                 smoothReturnCheck.Left = smoothHint.Left = half + margin / 2;
                 smoothReturnCheck.Width = smoothHint.Width = Math.Max(1, playbackOptions.ClientSize.Width - smoothReturnCheck.Left - margin);
+                cycleVariationCheck.Left = cycleVariationHint.Left = smoothReturnCheck.Left;
+                cycleVariationHint.Width = smoothHint.Width;
+                cycleVariationInput.Left = playbackOptions.ClientSize.Width - margin - cycleVariationInput.Width;
+                cycleVariationCheck.Width = Math.Max(1, cycleVariationInput.Left - cycleVariationCheck.Left - margin / 2);
+                cyclePauseCheck.Left = smoothReturnCheck.Left;
+                cyclePauseCheck.Width = smoothReturnCheck.Width;
+                int gap = margin / 3;
+                int fieldWidth = Math.Min(104, Math.Max(1, (cyclePauseCheck.Width - 2 * gap) / 3));
+                cyclePauseChanceInput.Width = cyclePauseMinutesInput.Width = cyclePauseMinimumInput.Width = fieldWidth;
+                cyclePauseChanceInput.Left = cyclePauseChanceLabel.Left = cyclePauseCheck.Left;
+                cyclePauseMinutesInput.Left = cyclePauseMinutesLabel.Left = cyclePauseChanceInput.Right + gap;
+                cyclePauseMinimumInput.Left = cyclePauseMinimumLabel.Left = cyclePauseMinutesInput.Right + gap;
             };
             grid.Controls.Add(playbackOptions, 0, 3);
             grid.SetColumnSpan(playbackOptions, 2);
@@ -1361,7 +1455,18 @@ namespace MacroDeck
                     IntervalMinutes = (int)minutesInput.Value,
                     IntervalSeconds = (int)secondsInput.Value,
                     VaryPlayback = variationCheck.Checked,
+                    VariationPixels = variationInput.Value,
+                    VaryActionTiming = actionVariationCheck.Checked,
+                    ActionVariationSeconds = actionVariationInput.Value,
+                    ClickVariationPercent = clickVariationInput.Value,
+                    VaryClickCount = clickVariationCheck.Checked,
                     SmoothCursorReturn = smoothReturnCheck.Checked,
+                    VaryCyclePause = cycleVariationCheck.Checked,
+                    CycleVariationSeconds = cycleVariationInput.Value,
+                    PauseBetweenCycles = cyclePauseCheck.Checked,
+                    CyclePauseChancePercent = cyclePauseChanceInput.Value,
+                    CyclePauseMinutes = cyclePauseMinutesInput.Value,
+                    CyclePauseMinimumCycles = cyclePauseMinimumInput.Value,
                     StartMouseX = recordingStartMouseX,
                     StartMouseY = recordingStartMouseY
                 };
@@ -1430,7 +1535,18 @@ namespace MacroDeck
                     selected.IntervalMinutes = macroToSave.IntervalMinutes;
                     selected.IntervalSeconds = macroToSave.IntervalSeconds;
                     selected.VaryPlayback = macroToSave.VaryPlayback;
+                    selected.VariationPixels = macroToSave.VariationPixels;
+                    selected.VaryActionTiming = macroToSave.VaryActionTiming;
+                    selected.ActionVariationSeconds = macroToSave.ActionVariationSeconds;
+                    selected.ClickVariationPercent = macroToSave.ClickVariationPercent;
+                    selected.VaryClickCount = macroToSave.VaryClickCount;
                     selected.SmoothCursorReturn = macroToSave.SmoothCursorReturn;
+                    selected.VaryCyclePause = macroToSave.VaryCyclePause;
+                    selected.CycleVariationSeconds = macroToSave.CycleVariationSeconds;
+                    selected.PauseBetweenCycles = macroToSave.PauseBetweenCycles;
+                    selected.CyclePauseChancePercent = macroToSave.CyclePauseChancePercent;
+                    selected.CyclePauseMinutes = macroToSave.CyclePauseMinutes;
+                    selected.CyclePauseMinimumCycles = macroToSave.CyclePauseMinimumCycles;
                     UpdateSelectedMacro();
                 }
                 else
@@ -1459,7 +1575,18 @@ namespace MacroDeck
                 StartMouseX = activeMacro.StartMouseX, StartMouseY = activeMacro.StartMouseY,
                 CycleInfinite = infiniteCheck.Checked,
                 IntervalMinutes = minutesInput.Value, IntervalSeconds = secondsInput.Value,
-                VaryPlayback = variationCheck.Checked, SmoothCursorReturn = smoothReturnCheck.Checked
+                VaryPlayback = variationCheck.Checked, SmoothCursorReturn = smoothReturnCheck.Checked,
+                VariationPixels = variationInput.Value,
+                VaryActionTiming = actionVariationCheck.Checked,
+                ActionVariationSeconds = actionVariationInput.Value,
+                ClickVariationPercent = clickVariationInput.Value,
+                VaryClickCount = clickVariationCheck.Checked,
+                VaryCyclePause = cycleVariationCheck.Checked,
+                CycleVariationSeconds = cycleVariationInput.Value,
+                PauseBetweenCycles = cyclePauseCheck.Checked,
+                CyclePauseChancePercent = cyclePauseChanceInput.Value,
+                CyclePauseMinutes = cyclePauseMinutesInput.Value,
+                CyclePauseMinimumCycles = cyclePauseMinimumInput.Value
             };
         }
 
@@ -1467,6 +1594,13 @@ namespace MacroDeck
         {
             minutesInput.CommitValue();
             secondsInput.CommitValue();
+            variationInput.CommitValue();
+            actionVariationInput.CommitValue();
+            clickVariationInput.CommitValue();
+            cycleVariationInput.CommitValue();
+            cyclePauseChanceInput.CommitValue();
+            cyclePauseMinutesInput.CommitValue();
+            cyclePauseMinimumInput.CommitValue();
         }
 
         private string GetMacroSettingsTargetPath()
@@ -1618,10 +1752,15 @@ namespace MacroDeck
             CancellationTokenSource source = new CancellationTokenSource();
             playbackCancel = source;
             MacroPlaybackInput input = new MacroPlaybackInput(source.Token, PlayEvent, ReleasePlaybackInput);
-            double intervalSeconds = (double)minutesInput.Value * 60.0 + (double)secondsInput.Value;
+            int intervalSeconds = minutesInput.Value * 60 + secondsInput.Value;
             bool repeat = infiniteCheck.Checked;
-            bool varyPlayback = variationCheck.Checked;
+            int variationPixels = variationCheck.Checked ? variationInput.Value : 0;
+            int maxActionDelayMs = actionVariationCheck.Checked ? actionVariationInput.Value * 1000 : 0;
+            int clickVariationPercent = clickVariationCheck.Checked ? clickVariationInput.Value : 0;
             bool smoothReturn = smoothReturnCheck.Checked;
+            int cycleVariationSeconds = cycleVariationCheck.Checked ? cycleVariationInput.Value : 0;
+            var cyclePause = new CyclePauseSchedule(cyclePauseChanceInput.Value,
+                cyclePauseCheck.Checked ? cyclePauseMinutesInput.Value : 0, cyclePauseMinimumInput.Value);
             Rectangle[] screens = Array.ConvertAll(Screen.AllScreens, delegate(Screen screen) { return screen.Bounds; });
             NativePoint macroMouseAnchor = new NativePoint();
             bool hasMouseAnchor = TryGetFirstMousePosition(macro, out macroMouseAnchor);
@@ -1647,10 +1786,9 @@ namespace MacroDeck
                         ? new IntPtr[] { cancelHandle }
                         : new IntPtr[] { playbackTimer, cancelHandle };
                     Random random = new Random(Guid.NewGuid().GetHashCode());
-
                     do
                     {
-                        PlaybackVariation variation = new PlaybackVariation(varyPlayback, random, screens);
+                        PlaybackVariation variation = new PlaybackVariation(variationPixels, random, screens);
                         Point anchor = variation.Position(new Point(macroMouseAnchor.X, macroMouseAnchor.Y));
                         if (smoothReturn && hasMouseAnchor)
                         {
@@ -1659,13 +1797,16 @@ namespace MacroDeck
                         else if (resetCursorToMacroStart)
                             input.Send(new MacroEvent { Kind = "move", X = anchor.X, Y = anchor.Y });
                         long cycleStartTimestamp = Stopwatch.GetTimestamp();
-                        for (int i = 0; i < macro.Events.Count; i++)
+                        var events = clickVariationPercent == 0 ? macro.Events :
+                            PlaybackMotion.VaryClicks(macro.Events, clickVariationPercent, random, source.Token);
+                        foreach (MacroEvent item in events)
                         {
                             if (source.IsCancellationRequested) break;
-                            MacroEvent item = macro.Events[i];
                             if (item == null || item.Kind == "limit") continue;
-                            long eventTime = variation.Time(GetEventTimeMicroseconds(item));
+                            long eventTime = PlaybackMotion.GetEventTimeMicroseconds(item);
+                            eventTime = variation.WithActionDelay(eventTime, item.Kind, input.HasHeldInput, maxActionDelayMs, random);
                             if (!WaitForPlaybackTime(cycleStartTimestamp, eventTime, source.Token, playbackTimer, waitHandles)) break;
+                            if (item.Kind == "wait") continue;
                             input.Send(variation.Event(item));
                         }
                         if (smoothReturn && hasMouseAnchor && !source.IsCancellationRequested)
@@ -1674,11 +1815,23 @@ namespace MacroDeck
                             if (!MoveCursorSmoothly(anchor, screens, random, input, source.Token, playbackTimer, waitHandles)) break;
                         }
                         if (!repeat || source.IsCancellationRequested) break;
-                        if (intervalSeconds > 0)
+                        int extraPauseMinutes = cyclePause.CompleteCycle(random);
+                        if (extraPauseMinutes > 0) input.ReleaseHeld();
+                        long pauseUs = PlaybackMotion.GetCyclePauseMicroseconds(intervalSeconds, cycleVariationSeconds, random);
+                        if (pauseUs > 0 && !WaitForPlaybackTime(Stopwatch.GetTimestamp(), pauseUs, source.Token, playbackTimer, waitHandles)) break;
+                        if (extraPauseMinutes > 0)
                         {
-                            long intervalTicks = (long)(intervalSeconds * Stopwatch.Frequency);
-                            long intervalDeadline = Stopwatch.GetTimestamp() + intervalTicks;
-                            if (!WaitUntilTimestamp(intervalDeadline, source.Token, playbackTimer, waitHandles)) break;
+                            PostToUi((MethodInvoker)delegate
+                            {
+                                if (generation == playbackGeneration && playing && !source.IsCancellationRequested)
+                                    statusLabel.Text = String.Format(Tr("Pausa entre ciclos · {0} min"), extraPauseMinutes);
+                            });
+                            if (cancellationWaitHandle.WaitOne(TimeSpan.FromMinutes(extraPauseMinutes))) break;
+                            PostToUi((MethodInvoker)delegate
+                            {
+                                if (generation == playbackGeneration && playing && !source.IsCancellationRequested)
+                                    statusLabel.Text = Tr("Reproduzindo");
+                            });
                         }
                     } while (!source.IsCancellationRequested);
                 }
@@ -1767,13 +1920,6 @@ namespace MacroDeck
                 }
             }
             return false;
-        }
-
-        private static long GetEventTimeMicroseconds(MacroEvent item)
-        {
-            if (item.TimeUs.HasValue) return Math.Max(0L, item.TimeUs.Value);
-            long milliseconds = Math.Max(0L, item.TimeMs);
-            return milliseconds > Int64.MaxValue / 1000L ? Int64.MaxValue : milliseconds * 1000L;
         }
 
         private static bool WaitForPlaybackTime(long cycleStartTimestamp, long targetMicroseconds, CancellationToken token, IntPtr playbackTimer, IntPtr[] waitHandles)
@@ -2014,7 +2160,14 @@ namespace MacroDeck
                             CycleInfinite = macro.CycleInfinite ?? legacyCycleInfinite,
                             IntervalMinutes = macro.IntervalMinutes ?? legacyIntervalMinutes,
                             IntervalSeconds = macro.IntervalSeconds ?? legacyIntervalSeconds,
-                            VaryPlayback = macro.VaryPlayback, SmoothCursorReturn = macro.SmoothCursorReturn
+                            VaryPlayback = macro.VaryPlayback, SmoothCursorReturn = macro.SmoothCursorReturn,
+                            VariationPixels = macro.VariationPixels, VaryActionTiming = macro.VaryActionTiming,
+                            ActionVariationSeconds = macro.ActionVariationSeconds,
+                            ClickVariationPercent = macro.ClickVariationPercent, VaryClickCount = macro.VaryClickCount,
+                            VaryCyclePause = macro.VaryCyclePause, CycleVariationSeconds = macro.CycleVariationSeconds,
+                            PauseBetweenCycles = macro.PauseBetweenCycles,
+                            CyclePauseChancePercent = CyclePauseSchedule.ReadChancePercent(macro.CyclePauseChancePercent, macro.CyclePauseDenominator),
+                            CyclePauseMinutes = macro.CyclePauseMinutes, CyclePauseMinimumCycles = macro.CyclePauseMinimumCycles
                         });
                     }
                 }
@@ -2152,7 +2305,18 @@ namespace MacroDeck
                 minutesInput.Value = minutes;
                 secondsInput.Value = seconds;
                 variationCheck.Checked = choice.VaryPlayback ?? false;
+                variationInput.Value = choice.VariationPixels ?? 0;
+                actionVariationCheck.Checked = choice.VaryActionTiming ?? false;
+                actionVariationInput.Value = choice.ActionVariationSeconds ?? 0;
+                clickVariationInput.Value = choice.ClickVariationPercent ?? 0;
+                clickVariationCheck.Checked = choice.VaryClickCount ?? (clickVariationInput.Value > 0);
                 smoothReturnCheck.Checked = choice.SmoothCursorReturn ?? false;
+                cycleVariationCheck.Checked = choice.VaryCyclePause ?? false;
+                cycleVariationInput.Value = choice.CycleVariationSeconds ?? 0;
+                cyclePauseCheck.Checked = choice.PauseBetweenCycles ?? false;
+                cyclePauseChanceInput.Value = choice.CyclePauseChancePercent ?? CyclePauseSchedule.DefaultChancePercent;
+                cyclePauseMinutesInput.Value = choice.CyclePauseMinutes ?? CyclePauseSchedule.DefaultMinutes;
+                cyclePauseMinimumInput.Value = choice.CyclePauseMinimumCycles ?? CyclePauseSchedule.DefaultMinimumCycles;
             }
             finally { applyingMacroSettings = false; }
 
@@ -2163,14 +2327,36 @@ namespace MacroDeck
             settings.Interval = minutes * 60 + seconds;
             settings.IntervalUnit = "segundos";
             settings.VaryPlayback = variationCheck.Checked;
+            settings.VariationPixels = variationInput.Value;
+            settings.VaryActionTiming = actionVariationCheck.Checked;
+            settings.ActionVariationSeconds = actionVariationInput.Value;
+            settings.ClickVariationPercent = clickVariationInput.Value;
+            settings.VaryClickCount = clickVariationCheck.Checked;
             settings.SmoothCursorReturn = smoothReturnCheck.Checked;
+            settings.VaryCyclePause = cycleVariationCheck.Checked;
+            settings.CycleVariationSeconds = cycleVariationInput.Value;
+            settings.PauseBetweenCycles = cyclePauseCheck.Checked;
+            settings.CyclePauseChancePercent = cyclePauseChanceInput.Value;
+            settings.CyclePauseMinutes = cyclePauseMinutesInput.Value;
+            settings.CyclePauseMinimumCycles = cyclePauseMinimumInput.Value;
             if (activeMacro != null)
             {
                 activeMacro.CycleInfinite = cycleInfinite;
                 activeMacro.IntervalMinutes = minutes;
                 activeMacro.IntervalSeconds = seconds;
                 activeMacro.VaryPlayback = variationCheck.Checked;
+                activeMacro.VariationPixels = variationInput.Value;
+                activeMacro.VaryActionTiming = actionVariationCheck.Checked;
+                activeMacro.ActionVariationSeconds = actionVariationInput.Value;
+                activeMacro.ClickVariationPercent = clickVariationInput.Value;
+                activeMacro.VaryClickCount = clickVariationCheck.Checked;
                 activeMacro.SmoothCursorReturn = smoothReturnCheck.Checked;
+                activeMacro.VaryCyclePause = cycleVariationCheck.Checked;
+                activeMacro.CycleVariationSeconds = cycleVariationInput.Value;
+                activeMacro.PauseBetweenCycles = cyclePauseCheck.Checked;
+                activeMacro.CyclePauseChancePercent = cyclePauseChanceInput.Value;
+                activeMacro.CyclePauseMinutes = cyclePauseMinutesInput.Value;
+                activeMacro.CyclePauseMinimumCycles = cyclePauseMinimumInput.Value;
             }
             macroSettingsDirty = false;
         }
@@ -2193,7 +2379,17 @@ namespace MacroDeck
         {
             if (deleteSelectedButton == null) return;
             if (variationCheck != null) variationCheck.Enabled = !recording && !playing && !activatingMacro;
+            actionVariationCheck.Enabled = variationCheck.Enabled;
+            variationInput.Enabled = variationCheck.Enabled && variationCheck.Checked;
+            actionVariationInput.Enabled = actionVariationCheck.Enabled && actionVariationCheck.Checked;
+            clickVariationCheck.Enabled = variationCheck.Enabled;
+            clickVariationInput.Enabled = clickVariationCheck.Enabled && clickVariationCheck.Checked;
             if (smoothReturnCheck != null) smoothReturnCheck.Enabled = !recording && !playing && !activatingMacro;
+            cycleVariationCheck.Enabled = variationCheck.Enabled;
+            cycleVariationInput.Enabled = cycleVariationCheck.Enabled && cycleVariationCheck.Checked;
+            cyclePauseCheck.Enabled = variationCheck.Enabled;
+            cyclePauseChanceInput.Enabled = cyclePauseMinutesInput.Enabled = cyclePauseMinimumInput.Enabled =
+                cyclePauseCheck.Enabled && cyclePauseCheck.Checked;
             deleteSelectedButton.Enabled = !recording && !playing && !activatingMacro && macroCombo.SelectedItem != null;
             deleteAllButton.Enabled = !recording && !playing && !activatingMacro && macroCombo.Items.Count > 0;
             if (refreshButton != null) refreshButton.Enabled = !activatingMacro;

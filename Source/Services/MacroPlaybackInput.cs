@@ -15,6 +15,8 @@ namespace MacroDeck
         private readonly HashSet<int> keys = new HashSet<int>();
         private readonly HashSet<int> buttons = new HashSet<int>();
 
+        public bool HasHeldInput { get { return keys.Count != 0 || buttons.Count != 0; } }
+
         public MacroPlaybackInput(CancellationToken cancellation, Action<MacroEvent> send, Action<MacroEvent> release)
         {
             this.cancellation = cancellation;

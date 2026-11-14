@@ -15,6 +15,7 @@ Desenvolvido por [shamanss07](https://github.com/shamanss07), com assistência d
 - Grava e reproduz ações de teclado e mouse.
 - Permite testar uma gravação antes de salvá-la e organizar macros em arquivos JSON.
 - Oferece atalhos globais configuráveis, repetição e intervalo entre ciclos.
+- Permite configurar por macro o deslocamento do mouse, os atrasos entre ações, a quantidade de cliques e as pausas entre ciclos.
 - Permite montar fluxos no Leitor para localizar e clicar em textos ou imagens na tela.
 - Minimiza para a área de notificação do Windows e mantém os atalhos globais disponíveis.
 - Inclui temas claro e escuro, personalização de cores e seleção de fontes instaladas.
@@ -28,7 +29,7 @@ O suporte inicial é **somente para Windows**. O programa foi desenvolvido em C#
 
 ## Instalação e uso
 
-Baixe `MacroDeck-1.1.5.exe` na seção **Releases** do GitHub e execute-o no Windows. Se o .NET Framework 4.8 não estiver instalado, o Windows poderá solicitar sua instalação.
+Baixe `MacroDeck-1.2.0.exe` na seção **Releases** do GitHub e execute-o no Windows. Se o .NET Framework 4.8 não estiver instalado, o Windows poderá solicitar sua instalação.
 
 1. Escolha a pasta onde os macros serão guardados.
 2. Informe um nome e clique em **Gravar**; o atalho padrão é F9.
@@ -47,7 +48,7 @@ Macros são arquivos JSON na pasta escolhida. As preferências ficam em `%APPDAT
 3. Execute:
 
    ```powershell
-   .\build.ps1 -OutputName MacroDeck-1.1.5.exe
+   .\build.ps1 -OutputName MacroDeck-1.2.0.exe
    ```
 
 O executável é criado na pasta raiz do projeto. Também é possível abrir `Source/MacroDeck.csproj` no Visual Studio. A licença OFL em `Source/Assets/Fonts/OFL.txt` cobre a fonte Montserrat incluída, não o código do MacroDeck.
